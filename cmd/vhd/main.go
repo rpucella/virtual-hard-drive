@@ -11,24 +11,48 @@ import (
 	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
+type drive struct{
+	name string
+	provider string
+	bucket string
+	catalog string
+}
+
+type command struct{
+	minArgCount int
+	maxArgCount int
+	process func([]string, *context)error
+	usage string
+	help string
+}
+
+type context struct{
+	commands map[string]command
+	drives map[string]drive
+	drive drive
+	pwd string
+	catalog string    // Should be a DirTree pointer.
+	current string    // Should be a pointer in the DirTree.
+	exit bool         // Set to true to exit the main loop.
+}
+
 func main() {
 	// Parse arguments if needed.
 	//args := os.Args[1:]
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// We need to put this here to break the initialization loop for command.
+	commands := initializeCommands()
+	drives, default_drive := initializeDrives()
 
 	fmt.Println("------------------------------------------------------------")
-	fmt.Println("                   VIRTUAL HARD DRIVE")
+	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
 	fmt.Println("------------------------------------------------------------")
 	fmt.Print("Drives: ")
 	for k, _ := range drives {
 		fmt.Printf("%s ", k)
 	}
 	fmt.Println()
-
-	initializeCommands()
 
 	// buckets, err := storage.ListBuckets("virtual-hard-drive")
 	// if err != nil {
@@ -46,17 +70,16 @@ func main() {
 	// 	fmt.Printf("%v\n", name)
 	// }
 
-	default_drive := "test"
 	cat, err := fetchCatalog(default_drive)
 	if err != nil {
 		stop(err)
 	}
 	catalog.Print(cat)
 
-	ctxt := repl_context{default_drive, "/", "", ""}
-	done := false
-	for !done {
-		fmt.Printf("\n%s:%s> ", ctxt.drive, ctxt.pwd)
+	ctxt := context{commands, drives, default_drive, "/", "", "", false}
+	for !ctxt.exit {
+		// Keep going until we nullify the context (flag for quitting)
+		fmt.Printf("\n%s:%s> ", ctxt.drive.name, ctxt.pwd)
 		line, _ := reader.ReadString('\n')
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
@@ -66,57 +89,39 @@ func main() {
 		args := fields[1:]
 		commObj, ok := commands[comm]
 		if !ok {
-			fmt.Printf("Unknown command - %s\n", comm)
+			fmt.Printf("Unknown command: %s\n", comm)
 			continue
 		}
-		if len(args) != commObj.argCount {
-			fmt.Printf("Wrong number of arguments to %s - expected %d\n", comm, commObj.argCount)
+		if len(args) < commObj.minArgCount {
+			fmt.Printf("Too few arguments (expected %d): %s\n", commObj.minArgCount, comm)
 			continue
 		}
-		ctxt, done = commObj.process(args, ctxt)	
+		if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
+			fmt.Printf("Too many arguments (expected %d): %s\n", commObj.maxArgCount, comm)
+			continue
+		}
+		err := commObj.process(args, &ctxt)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
 	}
-	
 }
 
 // For most errors, don't try to recover, just stop.
-
-type command struct{
-	argCount int
-	process func([]string, repl_context)(repl_context, bool)
-	help string
-}
-
-type repl_context struct{
-	drive string
-	pwd string
-	catalog string    // Should be a DirTree pointer.
-	current string    // Should be a pointer in the DirTree.
-}
-
-var commands map[string]command
 
 func stop(err error) {
 	fmt.Println(err)
 	os.Exit(1)
 }
 
-type drive struct{
-	provider string
-	bucket string
-	catalog string
-}
-
-var drives = map[string]drive {
-	"test": drive{"gcs", "vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002", "7b5d41cc-86d6-11ec-a8a3-0242ac120002"},
-}
-
-func fetchCatalog(dr string) (catalog.Catalog, error) {
-	cat_uuid := drives[dr].catalog
+func fetchCatalog(dr drive) (catalog.Catalog, error) {
+	cat_uuid := dr.catalog
 	path, err := storage.UIDToPath(cat_uuid)
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
 	}
-	bucket := drives[dr].bucket
+	bucket := dr.bucket
 	fmt.Printf("Fetching catalog for %s\n", bucket)
 	content, err := storage.ReadFile(bucket, path)
 	if err != nil {
