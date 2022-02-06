@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
 func maxLength(strings []string) int {
@@ -21,6 +22,9 @@ func initializeCommands() map[string]command {
 	commands["exit"] = command{0, 0, commandQuit, "exit", "Bail out"}
 	commands["help"] = command{0, 0, commandHelp, "help", "List available commands"}
 	commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive"}
+	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
+	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
+	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
 	return commands
 }
 
@@ -66,3 +70,55 @@ func commandDrive(args []string, ctxt *context) error {
 	ctxt.drive = newDrive
 	return nil
 }
+
+func commandLs(args []string, ctxt *context) error {
+	curr := ctxt.pwd
+	if len(args) > 0 {
+		newCurr, err := catalog.Navigate(curr, args[0], false)
+		if err != nil {
+			return fmt.Errorf("ls: %w", err)
+		}
+		curr = newCurr
+	}
+	dirs := make([]string, 0, len(curr.Content()))
+	files := make([]string, 0, len(curr.Content()))
+	for _, sub := range curr.Content() {
+		if sub.IsDir() {
+			dirs = append(dirs, sub.Name())
+		} else {
+			files = append(files, sub.Name())
+		}
+	}
+	sort.Strings(dirs)
+	sort.Strings(files)
+	for _, name := range dirs {
+		fmt.Printf("%s/\n", name)
+	}
+	for _, name := range files {
+		fmt.Printf("%s\n", name)
+	}
+	return nil
+}
+
+func commandCd(args []string, ctxt *context) error {
+	path := "/"
+	if len(args) > 0 {
+		path = args[0]
+	}
+	newPwd, err := catalog.Navigate(ctxt.pwd, path, false)
+	if err != nil {
+		return fmt.Errorf("cd: %w", err)
+	}
+	ctxt.pwd = newPwd
+	return nil
+}
+
+func commandCatalog(args []string, ctxt *context) error {
+	curr := ctxt.pwd
+	if len(args) > 0 {
+		fmt.Println("TODO")
+	}
+	catalog.Print(curr)
+	return nil
+}
+

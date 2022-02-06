@@ -30,9 +30,7 @@ type context struct{
 	commands map[string]command
 	drives map[string]drive
 	drive drive
-	pwd string
-	catalog string    // Should be a DirTree pointer.
-	current string    // Should be a pointer in the DirTree.
+	pwd catalog.Catalog
 	exit bool         // Set to true to exit the main loop.
 }
 
@@ -74,12 +72,18 @@ func main() {
 	if err != nil {
 		stop(err)
 	}
-	catalog.Print(cat)
 
-	ctxt := context{commands, drives, default_drive, "/", "", "", false}
+	ctxt := context{
+		commands,
+		drives,
+		default_drive,
+		cat,
+		false,
+	}
+	
 	for !ctxt.exit {
 		// Keep going until we nullify the context (flag for quitting)
-		fmt.Printf("\n%s:%s> ", ctxt.drive.name, ctxt.pwd)
+		fmt.Printf("\n%s:%s ", ctxt.drive.name, ctxt.pwd.Path())
 		line, _ := reader.ReadString('\n')
 		fields := strings.Fields(line)
 		if len(fields) == 0 {

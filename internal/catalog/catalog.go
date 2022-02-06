@@ -10,20 +10,24 @@ type Catalog interface {
 	IsFile() bool
 	IsDir() bool
 	Name() string
+	Path() string
 	Parent() Catalog
 	Content() map[string]Catalog
 	SetContent(string, Catalog)
 	UUID() string
+	Root() Catalog
 }
 
 type Directory struct {
 	name string
+	path string
 	content map[string]Catalog
 	parent Catalog
 }
 
 type File struct {
 	name string
+	path string
 	uuid string
 	parent Catalog
 }
@@ -33,7 +37,7 @@ func NewCatalog(flat []byte) (Catalog, error) {
 	strFlat := string(flat)
 	///fmt.Printf("Flat: [%s]\n", strFlat)
 	lines := strings.Split(strFlat, "\n")
-	var cat Catalog = &Directory{"", make(map[string]Catalog), nil}
+	var cat Catalog = &Directory{"", "/", make(map[string]Catalog), nil}
 	for _, rawLine := range lines {
 		line := strings.TrimSpace(rawLine)
 		if len(line) > 0 {
@@ -46,7 +50,8 @@ func NewCatalog(flat []byte) (Catalog, error) {
 			if err != nil {
 				return nil, fmt.Errorf("cannot parse catalog: %w", err)
 			}
-			var curr Catalog = nil
+			var curr Catalog
+			var currPath string
 			for i, dir := range directories {
 				if curr == nil {
 					// First directory should be empty
@@ -54,9 +59,11 @@ func NewCatalog(flat []byte) (Catalog, error) {
 						return nil, fmt.Errorf("path should be absolute %s", path)
 					}
 					curr = cat
+					currPath = "/"
 				} else if curr.IsFile() {
 					return nil, fmt.Errorf("file in middle of path %s", path)
 				} else if curr.IsDir() {
+					currPath = currPath + dir + "/"
 					// does the name exist?
 					content := curr.Content()
 					dirObj, ok := content[dir]
@@ -64,7 +71,7 @@ func NewCatalog(flat []byte) (Catalog, error) {
 						curr = dirObj
 					} else {
 						// Need to create the directory!
-						dirObj = &Directory{dir, make(map[string]Catalog), curr}
+						dirObj = &Directory{dir, currPath, make(map[string]Catalog), curr}
 						curr.SetContent(dir, dirObj)
 						curr = dirObj
 					}
@@ -81,7 +88,7 @@ func NewCatalog(flat []byte) (Catalog, error) {
 			if exists {
 				return nil, fmt.Errorf("file %s already exists in path %s", file, path)
 			}
-			fileObj := &File{file, uuid, curr}
+			fileObj := &File{file, currPath + file, uuid, curr}
 			curr.SetContent(file, fileObj)
 		}
 	}
@@ -135,6 +142,10 @@ func (d *Directory) Name() string {
 	return d.name
 }
 
+func (d *Directory) Path() string {
+	return d.path
+}
+
 func (d *Directory) Parent() Catalog {
 	return d.parent
 }
@@ -163,6 +174,10 @@ func (f *File) Name() string {
 	return f.name
 }
 
+func (f *File) Path() string {
+	return f.path
+}
+
 func (f *File) Parent() Catalog {
 	return f.parent
 }
@@ -179,3 +194,50 @@ func (f *File) UUID() string {
 	return f.uuid
 }
 
+func findRoot(cat Catalog) Catalog {
+	var curr Catalog = cat
+	for {
+		if curr.Parent() == nil {
+			return curr
+		}
+		curr = curr.Parent()
+	}
+}
+
+func (d *Directory) Root() Catalog {
+	return findRoot(d)
+}
+
+func (f *File) Root() Catalog {
+	return findRoot(f)
+}
+
+func DecomposePath(path string) []string {
+	return strings.Split(path, "/")
+}
+
+func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
+	// TODO: Handle . and .. in paths.
+	cleanPath := path
+	if strings.HasSuffix(path, "/") {
+		cleanPath = path[:len(path) - 1]
+	}
+	dirs := DecomposePath(cleanPath)
+	var curr Catalog = cat
+	for _, dir := range dirs {
+		if dir == "" {
+			// reset to root!
+			curr = findRoot(curr)
+		} else {
+			newCurr, found := curr.Content()[dir]
+			if !found {
+				return nil, fmt.Errorf("cannot find folder: %s", dir)
+			}
+			if !newCurr.IsDir() {
+				return nil, fmt.Errorf("not a folder: %s", newCurr.Name())
+			}
+			curr = newCurr
+		}
+	}
+	return curr, nil
+}
