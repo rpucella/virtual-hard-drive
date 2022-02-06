@@ -24,6 +24,7 @@ func initializeCommands() map[string]command {
 	commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive"}
 	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
+	commands["file"] = command{1, 1, commandFile, "file <file>", "Show file information"}
 	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
 	return commands
 }
@@ -117,9 +118,21 @@ func commandCd(args []string, ctxt *context) error {
 func commandCatalog(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		fmt.Println("TODO")
+		newCurr, err := catalog.Navigate(curr, args[0], false)
+		if err != nil {
+			return fmt.Errorf("catalog: %w", err)
+		}
+		curr = newCurr
 	}
 	catalog.Print(curr)
 	return nil
 }
 
+func commandFile(args []string, ctxt *context) error {
+	fileObj, err := catalog.NavigateFile(ctxt.pwd, args[0])
+	if err != nil {
+		return fmt.Errorf("file: %w", err)
+	}
+	fileObj.Print()
+	return nil
+}

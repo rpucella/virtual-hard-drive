@@ -16,6 +16,7 @@ type Catalog interface {
 	SetContent(string, Catalog)
 	UUID() string
 	Root() Catalog
+	Print() 
 }
 
 type Directory struct {
@@ -162,6 +163,11 @@ func (d *Directory) UUID() string {
 	return ""
 }
 
+func (d *Directory) Print() {
+	fmt.Printf("Name:     %s\n", d.name)
+	fmt.Printf("Path:     %s\n", d.path)
+}
+
 func (f *File) IsFile() bool {
 	return true
 }
@@ -194,6 +200,13 @@ func (f *File) UUID() string {
 	return f.uuid
 }
 
+func (f *File) Print() {
+	fmt.Printf("Name:     %s\n", f.name)
+	fmt.Printf("Path:     %s\n", f.path)
+	fmt.Printf("UUID:     %s\n", f.uuid)
+}
+
+
 func findRoot(cat Catalog) Catalog {
 	var curr Catalog = cat
 	for {
@@ -214,6 +227,14 @@ func (f *File) Root() Catalog {
 
 func DecomposePath(path string) []string {
 	return strings.Split(path, "/")
+}
+
+func DecomposePathFile(path string) ([]string, string) {
+	content := strings.Split(path, "/")
+	if len(content) == 0 {
+		return content, ""
+	}
+	return content[:len(content) - 1], content[len(content) - 1]
 }
 
 func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
@@ -247,3 +268,40 @@ func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
 	}
 	return curr, nil
 }
+
+func NavigateFile(cat Catalog, path string) (Catalog, error) {
+	dirs, file := DecomposePathFile(path)
+	var curr Catalog = cat
+	for _, dir := range dirs {
+		if dir == "" {
+			// Reset to root!
+			curr = findRoot(curr)
+		} else if dir == "." {
+			// Do nothing!
+		} else if dir == ".." {
+			if curr.Parent() == nil {
+				return nil, fmt.Errorf("root has no parent")
+			}
+			curr = curr.Parent()
+		} else {
+			newCurr, found := curr.Content()[dir]
+			if !found {
+				return nil, fmt.Errorf("cannot find folder: %s", dir)
+			}
+			if !newCurr.IsDir() {
+				return nil, fmt.Errorf("not a folder: %s", dir)
+			}
+			curr = newCurr
+		}
+	}
+	fileObj, found := curr.Content()[file]
+	if !found {
+		return nil, fmt.Errorf("cannot find file: %s", file)
+	}
+	if !fileObj.IsFile() {
+		return nil, fmt.Errorf("not a file: %s", file)
+	}
+	return fileObj, nil
+}
+
+
