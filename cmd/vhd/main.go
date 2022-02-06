@@ -8,6 +8,7 @@ import (
 	"bufio"
 
 	"rpucella.net/virtual-hard-drive/internal/storage"
+	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
 func main() {
@@ -36,29 +37,21 @@ func main() {
 	// for _, name := range buckets {
 	// 	fmt.Printf("Bucket: %v\n", name)
 	// }
-	files, err := storage.ListFiles("vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002")
-	if err != nil {
-		fmt.Println(err)
-	}
-	for _, name := range files {
-		fmt.Printf("%v\n", name)
-	}
+	
+	// files, err := storage.ListFiles("vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002")
+	// if err != nil {
+	// 	stop(err)
+	// }
+	// for _, name := range files {
+	// 	fmt.Printf("%v\n", name)
+	// }
 
-	// Fetch the catalog for the default drive.
 	default_drive := "test"
-	default_catalog := "7b5d41cc-86d6-11ec-a8a3-0242ac120002"
-	path, err := storage.UIDToPath("7b5d41cc-86d6-11ec-a8a3-0242ac120002")
+	cat, err := fetchCatalog(default_drive)
 	if err != nil {
-		fmt.Println(err)
+		stop(err)
 	}
-	fmt.Printf("Path for %s: %s\n", default_catalog, path)
-
-	content, err := storage.ReadFile(drives[default_drive].bucket, path)
-	catalog := string(content)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Printf("Content: %s\n", catalog)
+	catalog.Print(cat)
 
 	ctxt := repl_context{default_drive, "/", "", ""}
 	done := false
@@ -102,8 +95,8 @@ type repl_context struct{
 
 var commands map[string]command
 
-func stop(message string) {
-	fmt.Println(message)
+func stop(err error) {
+	fmt.Println(err)
 	os.Exit(1)
 }
 
@@ -115,4 +108,20 @@ type drive struct{
 
 var drives = map[string]drive {
 	"test": drive{"gcs", "vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002", "7b5d41cc-86d6-11ec-a8a3-0242ac120002"},
+}
+
+func fetchCatalog(dr string) (catalog.Catalog, error) {
+	cat_uuid := drives[dr].catalog
+	path, err := storage.UIDToPath(cat_uuid)
+	if err != nil {
+		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
+	}
+	bucket := drives[dr].bucket
+	fmt.Printf("Fetching catalog for %s\n", bucket)
+	content, err := storage.ReadFile(bucket, path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot fetch catalog: %s", err)
+	}
+	cat, err := catalog.NewCatalog(content)
+	return cat, nil
 }

@@ -8,7 +8,7 @@ import (
 
 func initializeCommands() {
 	commands = make(map[string]command)
-	commands["quit"] = command{0, commandQuit, "Bail out"}
+	commands["exit"] = command{0, commandQuit, "Bail out"}
 	commands["help"] = command{0, commandHelp, "List available commands"}
 }
 
