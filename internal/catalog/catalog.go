@@ -217,7 +217,6 @@ func DecomposePath(path string) []string {
 }
 
 func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
-	// TODO: Handle . and .. in paths.
 	cleanPath := path
 	if strings.HasSuffix(path, "/") {
 		cleanPath = path[:len(path) - 1]
@@ -226,8 +225,15 @@ func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
 	var curr Catalog = cat
 	for _, dir := range dirs {
 		if dir == "" {
-			// reset to root!
+			// Reset to root!
 			curr = findRoot(curr)
+		} else if dir == "." {
+			// Do nothing!
+		} else if dir == ".." {
+			if curr.Parent() == nil {
+				return nil, fmt.Errorf("root has no parent")
+			}
+			curr = curr.Parent()
 		} else {
 			newCurr, found := curr.Content()[dir]
 			if !found {

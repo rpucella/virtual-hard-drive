@@ -94,8 +94,9 @@ func commandLs(args []string, ctxt *context) error {
 	for _, name := range dirs {
 		fmt.Printf("%s/\n", name)
 	}
+	width := maxLength(files)
 	for _, name := range files {
-		fmt.Printf("%s\n", name)
+		fmt.Printf("%*s     %s\n", -width, name, curr.Content()[name].UUID())
 	}
 	return nil
 }
