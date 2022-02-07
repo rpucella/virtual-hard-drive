@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 	"bufio"
-
-	"rpucella.net/virtual-hard-drive/internal/storage"
+	
 	"rpucella.net/virtual-hard-drive/internal/catalog"
+	"rpucella.net/virtual-hard-drive/internal/storage"
 )
 
 type drive struct{
@@ -41,6 +41,10 @@ func main() {
 
 	commands := initializeCommands()
 	drives, default_drive := initializeDrives()
+	default_catalog, err := fetchCatalog(default_drive)
+	if err != nil {
+		stop(err)
+	}
 
 	fmt.Println("------------------------------------------------------------")
 	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
@@ -67,16 +71,11 @@ func main() {
 	// 	fmt.Printf("%v\n", name)
 	// }
 
-	cat, err := fetchCatalog(default_drive)
-	if err != nil {
-		stop(err)
-	}
-
 	ctxt := context{
 		commands,
 		drives,
 		default_drive,
-		cat,
+		default_catalog,
 		false,
 	}
 	
@@ -105,30 +104,13 @@ func main() {
 		}
 		err := commObj.process(args, &ctxt)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Error: %s\n", err)
 			continue
 		}
 	}
 }
 
-// For most errors, don't try to recover, just stop.
-
 func stop(err error) {
 	fmt.Println(err)
 	os.Exit(1)
-}
-
-func fetchCatalog(dr drive) (catalog.Catalog, error) {
-	cat_uuid := dr.catalog
-	path, err := storage.UUIDToPath(cat_uuid)
-	if err != nil {
-		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
-	}
-	fmt.Printf("Fetching catalog for %s\n", dr.storage.Name())
-	content, err := dr.storage.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot fetch catalog: %s", err)
-	}
-	cat, err := catalog.NewCatalog(content)
-	return cat, nil
 }

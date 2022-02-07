@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"rpucella.net/virtual-hard-drive/internal/catalog"
-	"rpucella.net/virtual-hard-drive/internal/storage"
 )
 
 func maxLength(strings []string) int {
@@ -25,7 +24,7 @@ func initializeCommands() map[string]command {
 	commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive"}
 	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
-	commands["file"] = command{1, 1, commandFile, "file <file>", "Show file information"}
+	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information"}
 	commands["download"] = command{1, 1, commandDownload, "download <file>", "Download file to disk"}
 	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
 	return commands
@@ -68,9 +67,15 @@ func commandDrive(args []string, ctxt *context) error {
 	newName := args[0]
 	newDrive, found := ctxt.drives[newName]
 	if !found {
-		return fmt.Errorf("Cannot find drive: %s", newName)
+		return fmt.Errorf("cannot find drive: %s", newName)
+	}
+	fmt.Printf("Fetching catalog for %s\n", newDrive.storage.Name())
+	cat, err := fetchCatalog(newDrive)
+	if err != nil {
+		return fmt.Errorf("cannot fetch catalog: %s", newName)
 	}
 	ctxt.drive = newDrive
+	ctxt.pwd = cat	
 	return nil
 }
 
@@ -130,10 +135,10 @@ func commandCatalog(args []string, ctxt *context) error {
 	return nil
 }
 
-func commandFile(args []string, ctxt *context) error {
+func commandInfo(args []string, ctxt *context) error {
 	fileObj, err := catalog.NavigateFile(ctxt.pwd, args[0])
 	if err != nil {
-		return fmt.Errorf("file: %w", err)
+		return fmt.Errorf("info: %w", err)
 	}
 	fileObj.Print()
 	return nil
@@ -144,7 +149,7 @@ func commandDownload(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
-	objectName, err := storage.UUIDToPath(fileObj.UUID())
+	objectName, err := ctxt.drive.storage.UUIDToPath(fileObj.UUID())
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}

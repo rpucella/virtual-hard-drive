@@ -2,7 +2,10 @@
 package main
 
 import (
+	"fmt"
+	
 	"rpucella.net/virtual-hard-drive/internal/storage"
+	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
 type drive_info struct {
@@ -15,10 +18,16 @@ type drive_info struct {
 func initializeDrives() (map[string]drive, drive) {
 	drivesList := [...]drive_info{
 		drive_info{
-			"test",
+			"gcs-test",
 			"gcs",
 			"vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002",
 			"7b5d41cc-86d6-11ec-a8a3-0242ac120002",
+		},
+		drive_info{
+			"local-test",
+			"local",
+			"/Users/riccardo/git/virtual-hard-drive/local_test",
+			"5abf40e0-87c2-11ec-a8a3-0242ac120002",
 		},
 	}
 	drives := make(map[string]drive)
@@ -26,6 +35,11 @@ func initializeDrives() (map[string]drive, drive) {
 		var store storage.Storage
 		if dr.provider == "gcs" {
 			store = storage.NewGoogleCloud(dr.bucket)
+		} else if dr.provider == "local" {
+			store = storage.NewLocalFileSystem(dr.bucket)
+		} else {
+			// Unrecognized provider - skip.
+			continue
 		}
 		drives[dr.name] = drive{
 			dr.name,
@@ -33,6 +47,20 @@ func initializeDrives() (map[string]drive, drive) {
 			store,
 		}
 	}
-	default_drive := drives["test"]
+	default_drive := drives["local-test"]
 	return drives, default_drive
+}
+
+func fetchCatalog(dr drive) (catalog.Catalog, error) {
+	cat_uuid := dr.catalog
+	path, err := dr.storage.UUIDToPath(cat_uuid)
+	if err != nil {
+		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
+	}
+	content, err := dr.storage.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot fetch catalog: %s", err)
+	}
+	cat, err := catalog.NewCatalog(content)
+	return cat, nil
 }

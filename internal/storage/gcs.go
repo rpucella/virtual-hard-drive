@@ -25,7 +25,20 @@ func NewGoogleCloud(bucket string) GoogleCloud {
 }
 
 func (s GoogleCloud) Name() string {
-	return fmt.Sprintf("gcs://%s", s.bucket)
+	return fmt.Sprintf("gcs::%s", s.bucket)
+}
+
+// Convert a UUID to a path on Cloud Storage.
+// E.g.,
+//   7b5d41cc-86d6-11eca8a3-0242ac120002
+// to
+//   7b/5d/41/cc/7b5d41cc-86d6-11eca8a3-0242ac120002
+
+func (s GoogleCloud) UUIDToPath(uuid string) (string, error) {
+	if len(uuid) != 36 {
+		return "", fmt.Errorf("length of UUID %s <> 36", uuid)
+	}
+	return fmt.Sprintf("%s/%s/%s/%s/%s", uuid[:2], uuid[2:4], uuid[4:6], uuid[6:8], uuid), nil
 }
 
 func (s GoogleCloud) ListFiles() ([]string, error) {
