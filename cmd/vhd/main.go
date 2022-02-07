@@ -121,7 +121,7 @@ func stop(err error) {
 
 func fetchCatalog(dr drive) (catalog.Catalog, error) {
 	cat_uuid := dr.catalog
-	path, err := storage.UIDToPath(cat_uuid)
+	path, err := storage.UUIDToPath(cat_uuid)
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
 	}

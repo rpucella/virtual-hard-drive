@@ -5,11 +5,16 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"io"
 	"io/ioutil"
+	"os"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 )
+
+// Examples mostly culled from
+//   https://github.com/GoogleCloudPlatform/golang-samples/tree/main/storage
 
 func ListFiles(bucket string) ([]string, error) {
 	ctx := context.Background()
@@ -85,4 +90,43 @@ func ReadFile(bucket string, file string) ([]byte, error) {
 		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
 	}
 	return data, nil
+}
+
+func DownloadFile(bucket string, file string, outputFileName string) error {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("storage.NewClient: %v", err)
+	}
+	defer client.Close()
+	
+	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
+	defer cancel()
+
+	f, err := os.Create(outputFileName)
+	if err != nil {
+		return fmt.Errorf("os.Create: %v", err)
+	}
+
+	obj := client.Bucket(bucket).Object(file)
+	_, err = obj.Attrs(ctx)
+	if err != nil {
+		return fmt.Errorf("Object(%q).Attrs: %v", file, err)
+	}
+	
+	rc, err := obj.NewReader(ctx)
+	if err != nil {
+		return fmt.Errorf("Object(%q).NewReader: %v", file, err)
+	}
+	defer rc.Close()
+
+	if _, err := io.Copy(f, rc); err != nil {
+		return fmt.Errorf("io.Copy: %v", err)
+	}
+
+	if err = f.Close(); err != nil {
+		return fmt.Errorf("f.Close: %v", err)
+	}
+
+	return nil
 }

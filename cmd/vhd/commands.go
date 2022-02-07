@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"rpucella.net/virtual-hard-drive/internal/catalog"
+	"rpucella.net/virtual-hard-drive/internal/storage"
 )
 
 func maxLength(strings []string) int {
@@ -25,6 +26,7 @@ func initializeCommands() map[string]command {
 	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
 	commands["file"] = command{1, 1, commandFile, "file <file>", "Show file information"}
+	commands["download"] = command{1, 1, commandDownload, "download <file>", "Download file to disk"}
 	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
 	return commands
 }
@@ -134,5 +136,22 @@ func commandFile(args []string, ctxt *context) error {
 		return fmt.Errorf("file: %w", err)
 	}
 	fileObj.Print()
+	return nil
+}
+
+func commandDownload(args []string, ctxt *context) error {
+	fileObj, err := catalog.NavigateFile(ctxt.pwd, args[0])
+	if err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+	objectName, err := storage.UUIDToPath(fileObj.UUID())
+	if err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+	err = storage.DownloadFile(ctxt.drive.bucket, objectName, fileObj.Name())
+	if err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+	fmt.Printf("Object %s downloaded to %s\n", objectName, fileObj.Name())
 	return nil
 }
