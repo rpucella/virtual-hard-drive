@@ -13,9 +13,8 @@ import (
 
 type drive struct{
 	name string
-	provider string
-	bucket string
 	catalog string
+	storage storage.Storage
 }
 
 type command struct{
@@ -125,9 +124,8 @@ func fetchCatalog(dr drive) (catalog.Catalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
 	}
-	bucket := dr.bucket
-	fmt.Printf("Fetching catalog for %s\n", bucket)
-	content, err := storage.ReadFile(bucket, path)
+	fmt.Printf("Fetching catalog for %s\n", dr.storage.Name())
+	content, err := dr.storage.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch catalog: %s", err)
 	}

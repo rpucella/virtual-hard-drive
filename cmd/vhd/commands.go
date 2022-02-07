@@ -61,7 +61,7 @@ func commandDrive(args []string, ctxt *context) error {
 		sort.Strings(keys)
 		width := maxLength(keys)
 		for _, k := range keys {
-			fmt.Printf("%*s   %s://%s\n", -width, k, ctxt.drives[k].provider, ctxt.drives[k].bucket)
+			fmt.Printf("%*s   %s\n", -width, k, ctxt.drives[k].storage.Name())
 		}
 		return nil
 	}
@@ -148,7 +148,7 @@ func commandDownload(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
-	err = storage.DownloadFile(ctxt.drive.bucket, objectName, fileObj.Name())
+	err = ctxt.drive.storage.DownloadFile(objectName, fileObj.Name())
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}

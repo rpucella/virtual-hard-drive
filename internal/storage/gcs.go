@@ -16,7 +16,20 @@ import (
 // Examples mostly culled from
 //   https://github.com/GoogleCloudPlatform/golang-samples/tree/main/storage
 
-func ListFiles(bucket string) ([]string, error) {
+type GoogleCloud struct {
+	bucket string
+}
+
+func NewGoogleCloud(bucket string) GoogleCloud {
+	return GoogleCloud{bucket}
+}
+
+func (s GoogleCloud) Name() string {
+	return fmt.Sprintf("gcs://%s", s.bucket)
+}
+
+func (s GoogleCloud) ListFiles() ([]string, error) {
+	bucket := s.bucket
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
@@ -68,7 +81,8 @@ func ListBuckets(projectID string) ([]string, error) {
 	return buckets, nil
 }
 
-func ReadFile(bucket string, file string) ([]byte, error) {
+func (s GoogleCloud) ReadFile(file string) ([]byte, error) {
+	bucket := s.bucket
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
@@ -92,7 +106,8 @@ func ReadFile(bucket string, file string) ([]byte, error) {
 	return data, nil
 }
 
-func DownloadFile(bucket string, file string, outputFileName string) error {
+func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
+	bucket := s.bucket
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
