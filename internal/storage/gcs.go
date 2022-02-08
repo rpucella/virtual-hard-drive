@@ -41,6 +41,10 @@ func (s GoogleCloud) UUIDToPath(uuid string) (string, error) {
 	return fmt.Sprintf("%s/%s/%s/%s/%s", uuid[:2], uuid[2:4], uuid[4:6], uuid[6:8], uuid), nil
 }
 
+func (s GoogleCloud) CatalogToPath(catalog string) (string, error) {
+	return catalog, nil
+}
+
 func (s GoogleCloud) ListFiles() ([]string, error) {
 	bucket := s.bucket
 	ctx := context.Background()

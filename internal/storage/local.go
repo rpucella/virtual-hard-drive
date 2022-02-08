@@ -28,6 +28,10 @@ func (s LocalFileSystem) UUIDToPath(uuid string) (string, error) {
 	return uuid, nil
 }
 
+func (s LocalFileSystem) CatalogToPath(catalog string) (string, error) {
+	return catalog, nil
+}
+
 func (s LocalFileSystem) ListFiles() ([]string, error) {
 	result := make([]string, 10)
 	accumulate := func(path string, info os.FileInfo, err error) error {

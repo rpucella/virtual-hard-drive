@@ -12,7 +12,7 @@ type drive_info struct {
 	name string
 	provider string
 	bucket string
-	catalog string
+	// encryption string
 }
 
 func initializeDrives() (map[string]drive, drive) {
@@ -21,13 +21,11 @@ func initializeDrives() (map[string]drive, drive) {
 			"gcs-test",
 			"gcs",
 			"vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002",
-			"7b5d41cc-86d6-11ec-a8a3-0242ac120002",
 		},
 		drive_info{
 			"local-test",
 			"local",
 			"/Users/riccardo/git/virtual-hard-drive/local_test",
-			"5abf40e0-87c2-11ec-a8a3-0242ac120002",
 		},
 	}
 	drives := make(map[string]drive)
@@ -43,7 +41,6 @@ func initializeDrives() (map[string]drive, drive) {
 		}
 		drives[dr.name] = drive{
 			dr.name,
-			dr.catalog,
 			store,
 		}
 	}
@@ -52,8 +49,7 @@ func initializeDrives() (map[string]drive, drive) {
 }
 
 func fetchCatalog(dr drive) (catalog.Catalog, error) {
-	cat_uuid := dr.catalog
-	path, err := dr.storage.UUIDToPath(cat_uuid)
+	path, err := dr.storage.CatalogToPath("catalog")
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
 	}

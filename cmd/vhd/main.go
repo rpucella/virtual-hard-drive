@@ -13,7 +13,6 @@ import (
 
 type drive struct{
 	name string
-	catalog string
 	storage storage.Storage
 }
 
