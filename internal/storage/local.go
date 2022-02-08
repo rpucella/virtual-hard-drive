@@ -59,6 +59,15 @@ func (s LocalFileSystem) ReadFile(file string) ([]byte, error) {
 	return data, nil
 }
 
+func (s LocalFileSystem) WriteFile(file string, content []byte) error {
+	path := path.Join(s.root, file)
+	err := os.WriteFile(path, content, 0666)
+	if err != nil {
+		return fmt.Errorf("os.WriteFile: %v", err)
+	}
+	return nil
+}
+
 func (s LocalFileSystem) DownloadFile(file string, outputFileName string) error {
 	path := path.Join(s.root, file)
 	src, err := os.Open(path)
@@ -68,6 +77,27 @@ func (s LocalFileSystem) DownloadFile(file string, outputFileName string) error 
 	defer src.Close()
 
 	dest, err := os.Create(outputFileName)
+	if err != nil {
+		return fmt.Errorf("os.Create: %v", err)
+	}
+	defer dest.Close()
+
+	if _, err := io.Copy(dest, src); err != nil {
+		return fmt.Errorf("io.Copy: %v", err)
+	}
+
+	return nil
+}
+
+func (s LocalFileSystem) UploadFile(file string, target string) error {
+	src, err := os.Open(file)
+	if err != nil {
+		return fmt.Errorf("os.Open: %v", err)
+	}
+	defer src.Close()
+
+	path := path.Join(s.root, target)
+	dest, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("os.Create: %v", err)
 	}

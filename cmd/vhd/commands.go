@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"rpucella.net/virtual-hard-drive/internal/catalog"
+	"github.com/google/uuid"
+	"path/filepath"
 )
 
 func maxLength(strings []string) int {
@@ -26,6 +28,7 @@ func initializeCommands() map[string]command {
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
 	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information"}
 	commands["download"] = command{1, 1, commandDownload, "download <file>", "Download file to disk"}
+	commands["upload"] = command{1, 2, commandUpload, "upload <local-file> [<folder>]", "Upload local file to drive folder"}
 	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
 	return commands
 }
@@ -158,5 +161,38 @@ func commandDownload(args []string, ctxt *context) error {
 		return fmt.Errorf("download: %w", err)
 	}
 	fmt.Printf("Object %s downloaded to %s\n", objectName, fileObj.Name())
+	return nil
+}
+
+func commandUpload(args []string, ctxt *context) error {
+	srcFilePath := args[0]
+	srcFileName := filepath.Base(srcFilePath)
+	destFolder := ctxt.pwd
+	if len(args) == 2 {
+		newDestFolder, err := catalog.Navigate(ctxt.pwd, args[1], false)
+		if err != nil {
+			return fmt.Errorf("upload: %w", err)
+		}
+		destFolder = newDestFolder
+	}
+	_, found := destFolder.Content()[srcFileName]
+	if found {
+		// Confirm overwrite? Or force user to delete first?
+		return fmt.Errorf("upload: file %s already exists in %s", srcFileName, destFolder.Path())
+	}
+	newUUID := uuid.NewString()
+	objectName, err := ctxt.drive.storage.UUIDToPath(newUUID)
+	if err != nil {
+		return fmt.Errorf("upload: %w", err)
+	}
+	// Upload to storage.
+	err = ctxt.drive.storage.UploadFile(srcFilePath, objectName)
+	if err != nil {
+		return fmt.Errorf("upload: %w", err)
+	}
+	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
+	// Add file to catalog.
+	catalog.AddFile(destFolder, srcFileName, newUUID)
+	updateCatalog(ctxt.drive, destFolder.Root())
 	return nil
 }

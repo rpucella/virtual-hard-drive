@@ -84,7 +84,6 @@ func main() {
 		fmt.Printf("\n%s:%s ", ctxt.drive.name, ctxt.pwd.Path())
 		line, _ := reader.ReadString('\n')
 		fields := split(line) // strings.Fields(line)
-		fmt.Println("%v", fields)
 		if len(fields) == 0 {
 			continue
 		}

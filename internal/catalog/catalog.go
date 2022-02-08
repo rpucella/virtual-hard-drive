@@ -304,4 +304,37 @@ func NavigateFile(cat Catalog, path string) (Catalog, error) {
 	return fileObj, nil
 }
 
+func AddFile(cat Catalog, name string, uuid string) error {
+	_, found := cat.Content()[name]
+	if found {
+		return fmt.Errorf("file %s already exists at %s", name, cat.Path())
+	}
+	path := cat.Path() + name
+	file := &File{name, path, uuid, cat}
+	cat.Content()[name] = file
+	return nil
+}
 
+func flatten(cat Catalog, prefix string) []string {
+	result := make([]string, 0)     // cat.Size()
+	if cat == nil { 
+		return result
+	}
+	if cat.IsFile() {
+		line := fmt.Sprintf("%s:%s", prefix, cat.UUID())
+		result = append(result, line)
+	} else {
+		for k, v := range cat.Content() {
+			newPrefix := fmt.Sprintf("%s/%s", prefix, k)
+			newLines := flatten(v, newPrefix)
+			for _, line := range newLines {
+				result = append(result, line)
+			}
+		}
+	}
+	return result
+}
+
+func Flatten(cat Catalog) []string {
+	return flatten(cat, "")
+}

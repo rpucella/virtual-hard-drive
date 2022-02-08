@@ -123,6 +123,31 @@ func (s GoogleCloud) ReadFile(file string) ([]byte, error) {
 	return data, nil
 }
 
+func (s GoogleCloud) WriteFile(file string, content []byte) error {
+//	bucket := s.bucket
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("storage.NewClient: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
+	defer cancel()
+
+	// rc, err := client.Bucket(bucket).Object(file).NewReader(ctx)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Object(%q).NewReader: %v", file, err)
+	// }
+	// defer rc.Close()
+
+	// data, err := ioutil.ReadAll(rc)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
+	// }
+	return nil
+}
+
 func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
 	bucket := s.bucket
 	ctx := context.Background()
@@ -159,6 +184,46 @@ func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
 	if err = f.Close(); err != nil {
 		return fmt.Errorf("f.Close: %v", err)
 	}
+
+	return nil
+}
+
+func (s GoogleCloud) UploadFile(file string, target string) error {
+	// bucket := s.bucket
+	// ctx := context.Background()
+	// client, err := storage.NewClient(ctx)
+	// if err != nil {
+	// 	return fmt.Errorf("storage.NewClient: %v", err)
+	// }
+	// defer client.Close()
+	
+	// ctx, cancel := context.WithTimeout(ctx, time.Second*50)
+	// defer cancel()
+
+	// f, err := os.Create(outputFileName)
+	// if err != nil {
+	// 	return fmt.Errorf("os.Create: %v", err)
+	// }
+
+	// obj := client.Bucket(bucket).Object(file)
+	// _, err = obj.Attrs(ctx)
+	// if err != nil {
+	// 	return fmt.Errorf("Object(%q).Attrs: %v", file, err)
+	// }
+	
+	// rc, err := obj.NewReader(ctx)
+	// if err != nil {
+	// 	return fmt.Errorf("Object(%q).NewReader: %v", file, err)
+	// }
+	// defer rc.Close()
+
+	// if _, err := io.Copy(f, rc); err != nil {
+	// 	return fmt.Errorf("io.Copy: %v", err)
+	// }
+
+	// if err = f.Close(); err != nil {
+	// 	return fmt.Errorf("f.Close: %v", err)
+	// }
 
 	return nil
 }

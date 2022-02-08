@@ -7,6 +7,8 @@ type Storage interface {
 	CatalogToPath(string) (string, error)
 	ListFiles() ([]string, error)
 	ReadFile(string) ([]byte, error)
+	WriteFile(string, []byte) error
 	DownloadFile(string, string) error
+	UploadFile(string, string) error
 }
 

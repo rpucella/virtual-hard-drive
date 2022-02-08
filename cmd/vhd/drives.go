@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	
 	"rpucella.net/virtual-hard-drive/internal/storage"
 	"rpucella.net/virtual-hard-drive/internal/catalog"
@@ -59,4 +60,19 @@ func fetchCatalog(dr drive) (catalog.Catalog, error) {
 	}
 	cat, err := catalog.NewCatalog(content)
 	return cat, nil
+}
+
+func updateCatalog(dr drive, cat catalog.Catalog) error {
+	path, err := dr.storage.CatalogToPath("catalog")
+	if err != nil {
+		return fmt.Errorf("cannot update catalog: %w", err)
+	}
+	flatCat := catalog.Flatten(cat)
+	catFile := []byte(strings.Join(flatCat, "\n") + "\n")
+	// TODO: Backup old catalog.
+	err = dr.storage.WriteFile(path, catFile)
+	if err != nil {
+		return fmt.Errorf("cannot update catalog: %s", err)
+	}
+	return nil
 }
