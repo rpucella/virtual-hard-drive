@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"bufio"
+	"unicode"
 	
 	"rpucella.net/virtual-hard-drive/internal/catalog"
 	"rpucella.net/virtual-hard-drive/internal/storage"
@@ -82,7 +83,8 @@ func main() {
 		// Keep going until we nullify the context (flag for quitting)
 		fmt.Printf("\n%s:%s ", ctxt.drive.name, ctxt.pwd.Path())
 		line, _ := reader.ReadString('\n')
-		fields := strings.Fields(line)
+		fields := split(line) // strings.Fields(line)
+		fmt.Println("%v", fields)
 		if len(fields) == 0 {
 			continue
 		}
@@ -107,6 +109,34 @@ func main() {
 			continue
 		}
 	}
+}
+
+// Split a line into fields at spaces.
+// Do not split within double quotes "...".
+//
+func split(s string) []string {
+	result := []string{}
+	sb := &strings.Builder{}
+	quoted := false
+	started := false
+	for _, r := range s {
+		if r == '"' {
+			quoted = !quoted
+		} else if !quoted && unicode.IsSpace(r) {
+			if started {
+				result = append(result, sb.String())
+				sb.Reset()
+			}
+			started = false
+		} else {
+			started = true
+			sb.WriteRune(r)
+		}
+	}
+	if sb.Len() > 0 {
+		result = append(result, sb.String())
+	}
+	return result
 }
 
 func stop(err error) {
