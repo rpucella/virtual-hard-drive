@@ -123,8 +123,8 @@ func (s GoogleCloud) ReadFile(file string) ([]byte, error) {
 	return data, nil
 }
 
-func (s GoogleCloud) WriteFile(file string, content []byte) error {
-//	bucket := s.bucket
+func (s GoogleCloud) WriteFile(content []byte, target string) error {
+	bucket := s.bucket
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
@@ -135,16 +135,13 @@ func (s GoogleCloud) WriteFile(file string, content []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
 
-	// rc, err := client.Bucket(bucket).Object(file).NewReader(ctx)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Object(%q).NewReader: %v", file, err)
-	// }
-	// defer rc.Close()
+	wc := client.Bucket(bucket).Object(target).NewWriter(ctx)
+	defer wc.Close()
 
-	// data, err := ioutil.ReadAll(rc)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
-	// }
+	_, err = wc.Write(content)
+	if err != nil {
+		return fmt.Errorf("wc.Write: %v", err)
+	}
 	return nil
 }
 
@@ -184,46 +181,32 @@ func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
 	if err = f.Close(); err != nil {
 		return fmt.Errorf("f.Close: %v", err)
 	}
-
 	return nil
 }
 
 func (s GoogleCloud) UploadFile(file string, target string) error {
-	// bucket := s.bucket
-	// ctx := context.Background()
-	// client, err := storage.NewClient(ctx)
-	// if err != nil {
-	// 	return fmt.Errorf("storage.NewClient: %v", err)
-	// }
-	// defer client.Close()
-	
-	// ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-	// defer cancel()
+	bucket := s.bucket
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("storage.NewClient: %v", err)
+	}
+	defer client.Close()
 
-	// f, err := os.Create(outputFileName)
-	// if err != nil {
-	// 	return fmt.Errorf("os.Create: %v", err)
-	// }
+	f, err := os.Open(file)
+	if err != nil {
+		return fmt.Errorf("os.Open: %v", err)
+	}
+	defer f.Close()
 
-	// obj := client.Bucket(bucket).Object(file)
-	// _, err = obj.Attrs(ctx)
-	// if err != nil {
-	// 	return fmt.Errorf("Object(%q).Attrs: %v", file, err)
-	// }
-	
-	// rc, err := obj.NewReader(ctx)
-	// if err != nil {
-	// 	return fmt.Errorf("Object(%q).NewReader: %v", file, err)
-	// }
-	// defer rc.Close()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
+	defer cancel()
 
-	// if _, err := io.Copy(f, rc); err != nil {
-	// 	return fmt.Errorf("io.Copy: %v", err)
-	// }
+	wc := client.Bucket(bucket).Object(target).NewWriter(ctx)
+	defer wc.Close()
 
-	// if err = f.Close(); err != nil {
-	// 	return fmt.Errorf("f.Close: %v", err)
-	// }
-
+	if _, err := io.Copy(wc, f); err != nil {
+		return fmt.Errorf("io.Copy: %v", err)
+	}
 	return nil
 }
