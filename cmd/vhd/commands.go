@@ -9,6 +9,15 @@ import (
 	"path/filepath"
 )
 
+type command struct{
+	minArgCount int
+	maxArgCount int
+	process func([]string, *context)error
+	usage string
+	help string
+	requireDrive bool
+}
+
 func maxLength(strings []string) int {
 	current := 0
 	for _, s := range strings {
@@ -21,15 +30,15 @@ func maxLength(strings []string) int {
 
 func initializeCommands() map[string]command {
 	commands := make(map[string]command)
-	commands["exit"] = command{0, 0, commandQuit, "exit", "Bail out"}
-	commands["help"] = command{0, 0, commandHelp, "help", "List available commands"}
-	commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive"}
-	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
-	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
-	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information"}
-	commands["download"] = command{1, 1, commandDownload, "download <file>", "Download file to disk"}
-	commands["upload"] = command{1, 2, commandUpload, "upload <local-file> [<folder>]", "Upload local file to drive folder"}
-	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
+	commands["exit"] = command{0, 0, commandQuit, "exit", "Bail out", false}
+	commands["help"] = command{0, 0, commandHelp, "help", "List available commands", false}
+	commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive", false}
+	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder", true}
+	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder", true}
+	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information", true}
+	commands["download"] = command{1, 1, commandDownload, "download <file>", "Download file to disk", true}
+	commands["upload"] = command{1, 2, commandUpload, "upload <local-file> [<folder>]", "Upload local file to drive folder", true}
+	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder", true}
 	return commands
 }
 
@@ -72,12 +81,12 @@ func commandDrive(args []string, ctxt *context) error {
 	if !found {
 		return fmt.Errorf("cannot find drive: %s", newName)
 	}
-	fmt.Printf("Fetching catalog for %s\n", newDrive.storage.Name())
+	fmt.Printf("Loading catalog for %s\n", newDrive.storage.Name())
 	cat, err := fetchCatalog(newDrive)
 	if err != nil {
 		return fmt.Errorf("cannot fetch catalog: %s", newName)
 	}
-	ctxt.drive = newDrive
+	ctxt.drive = &newDrive
 	ctxt.pwd = cat	
 	return nil
 }
@@ -193,6 +202,6 @@ func commandUpload(args []string, ctxt *context) error {
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
 	catalog.AddFile(destFolder, srcFileName, newUUID)
-	updateCatalog(ctxt.drive, destFolder.Root())
+	updateCatalog(*ctxt.drive, destFolder.Root())
 	return nil
 }

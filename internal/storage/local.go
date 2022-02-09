@@ -61,7 +61,7 @@ func (s LocalFileSystem) ReadFile(file string) ([]byte, error) {
 
 func (s LocalFileSystem) WriteFile(file string, content []byte) error {
 	path := path.Join(s.root, file)
-	err := os.WriteFile(path, content, 0666)
+	err := os.WriteFile(path, content, 0600)
 	if err != nil {
 		return fmt.Errorf("os.WriteFile: %v", err)
 	}

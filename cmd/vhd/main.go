@@ -9,26 +9,12 @@ import (
 	"unicode"
 	
 	"rpucella.net/virtual-hard-drive/internal/catalog"
-	"rpucella.net/virtual-hard-drive/internal/storage"
 )
-
-type drive struct{
-	name string
-	storage storage.Storage
-}
-
-type command struct{
-	minArgCount int
-	maxArgCount int
-	process func([]string, *context)error
-	usage string
-	help string
-}
 
 type context struct{
 	commands map[string]command
 	drives map[string]drive
-	drive drive
+	drive *drive
 	pwd catalog.Catalog
 	exit bool         // Set to true to exit the main loop.
 }
@@ -40,11 +26,15 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	commands := initializeCommands()
-	drives, default_drive := initializeDrives()
-	default_catalog, err := fetchCatalog(default_drive)
+	drives, err := readDrives()
 	if err != nil {
-		stop(err)
+		panic(err)
 	}
+	///drives, default_drive := initializeDrives()
+	///default_catalog, err := fetchCatalog(default_drive)
+	///if err != nil {
+	///		panic(err)
+	///}
 
 	fmt.Println("------------------------------------------------------------")
 	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
@@ -55,33 +45,21 @@ func main() {
 	}
 	fmt.Println()
 
-	// buckets, err := storage.ListBuckets("virtual-hard-drive")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// for _, name := range buckets {
-	// 	fmt.Printf("Bucket: %v\n", name)
-	// }
-	
-	// files, err := storage.ListFiles("vhd-7b5d41cc-86d6-11ec-a8a3-0242ac120002")
-	// if err != nil {
-	// 	stop(err)
-	// }
-	// for _, name := range files {
-	// 	fmt.Printf("%v\n", name)
-	// }
-
 	ctxt := context{
 		commands,
 		drives,
-		default_drive,
-		default_catalog,
+		nil,
+		nil,
 		false,
 	}
 	
 	for !ctxt.exit {
 		// Keep going until we nullify the context (flag for quitting)
-		fmt.Printf("\n%s:%s ", ctxt.drive.name, ctxt.pwd.Path())
+		if ctxt.drive == nil {
+			fmt.Printf("\n(no drive) ")
+		} else {
+			fmt.Printf("\n%s:%s ", ctxt.drive.name, ctxt.pwd.Path())
+		}
 		line, _ := reader.ReadString('\n')
 		fields := split(line) // strings.Fields(line)
 		if len(fields) == 0 {
@@ -100,6 +78,10 @@ func main() {
 		}
 		if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
 			fmt.Printf("Too many arguments (expected %d): %s\n", commObj.maxArgCount, comm)
+			continue
+		}
+		if ctxt.drive == nil && commObj.requireDrive {
+			fmt.Printf("Command requires drive selection: %s\n", comm)
 			continue
 		}
 		err := commObj.process(args, &ctxt)
@@ -136,9 +118,4 @@ func split(s string) []string {
 		result = append(result, sb.String())
 	}
 	return result
-}
-
-func stop(err error) {
-	fmt.Println(err)
-	os.Exit(1)
 }
