@@ -36,9 +36,10 @@ func initializeCommands() map[string]command {
 	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder", true}
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder", true}
 	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information", true}
-	commands["download"] = command{1, 1, commandDownload, "download <file>", "Download file to disk", true}
-	commands["upload"] = command{1, 2, commandUpload, "upload <local-file> [<folder>]", "Upload local file to drive folder", true}
+	commands["get"] = command{1, 1, commandGet, "get <file>", "Download file to disk", true}
+	commands["put"] = command{1, 2, commandPut, "put <local-file> [<folder>]", "Upload local file to drive folder", true}
 	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder", true}
+	commands["mkdir"] = command{1, 1, commandMkdir, "mkdir <folder>", "Create folder", true}
 	return commands
 }
 
@@ -100,7 +101,7 @@ func commandDrive(args []string, ctxt *context) error {
 func commandLs(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		newCurr, err := catalog.Navigate(curr, args[0], false)
+		newCurr, err := catalog.Navigate(curr, args[0])
 		if err != nil {
 			return fmt.Errorf("ls: %w", err)
 		}
@@ -132,7 +133,7 @@ func commandCd(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	newPwd, err := catalog.Navigate(ctxt.pwd, path, false)
+	newPwd, err := catalog.Navigate(ctxt.pwd, path)
 	if err != nil {
 		return fmt.Errorf("cd: %w", err)
 	}
@@ -143,7 +144,7 @@ func commandCd(args []string, ctxt *context) error {
 func commandCatalog(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		newCurr, err := catalog.Navigate(curr, args[0], false)
+		newCurr, err := catalog.Navigate(curr, args[0])
 		if err != nil {
 			return fmt.Errorf("catalog: %w", err)
 		}
@@ -162,52 +163,71 @@ func commandInfo(args []string, ctxt *context) error {
 	return nil
 }
 
-func commandDownload(args []string, ctxt *context) error {
+func commandGet(args []string, ctxt *context) error {
 	fileObj, err := catalog.NavigateFile(ctxt.pwd, args[0])
 	if err != nil {
-		return fmt.Errorf("download: %w", err)
+		return fmt.Errorf("get: %w", err)
 	}
 	objectName, err := ctxt.drive.storage.UUIDToPath(fileObj.UUID())
 	if err != nil {
-		return fmt.Errorf("download: %w", err)
+		return fmt.Errorf("get: %w", err)
 	}
 	err = ctxt.drive.storage.DownloadFile(objectName, fileObj.Name())
 	if err != nil {
-		return fmt.Errorf("download: %w", err)
+		return fmt.Errorf("get: %w", err)
 	}
 	fmt.Printf("Object %s downloaded to %s\n", objectName, fileObj.Name())
 	return nil
 }
 
-func commandUpload(args []string, ctxt *context) error {
+func commandPut(args []string, ctxt *context) error {
 	srcFilePath := args[0]
 	srcFileName := filepath.Base(srcFilePath)
 	destFolder := ctxt.pwd
 	if len(args) == 2 {
-		newDestFolder, err := catalog.Navigate(ctxt.pwd, args[1], false)
+		newDestFolder, err := catalog.Navigate(ctxt.pwd, args[1])
 		if err != nil {
-			return fmt.Errorf("upload: %w", err)
+			return fmt.Errorf("put: %w", err)
 		}
 		destFolder = newDestFolder
 	}
 	_, found := destFolder.Content()[srcFileName]
 	if found {
 		// Confirm overwrite? Or force user to delete first?
-		return fmt.Errorf("upload: file %s already exists in %s", srcFileName, destFolder.Path())
+		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.Path())
 	}
 	newUUID := uuid.NewString()
 	objectName, err := ctxt.drive.storage.UUIDToPath(newUUID)
 	if err != nil {
-		return fmt.Errorf("upload: %w", err)
+		return fmt.Errorf("put: %w", err)
 	}
 	// Upload to storage.
 	err = ctxt.drive.storage.UploadFile(srcFilePath, objectName)
 	if err != nil {
-		return fmt.Errorf("upload: %w", err)
+		return fmt.Errorf("put: %w", err)
 	}
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
 	catalog.AddFile(destFolder, srcFileName, newUUID)
-	updateCatalog(*ctxt.drive, destFolder.Root())
+	if err := updateCatalog(*ctxt.drive, destFolder.Root()); err != nil {
+		// TODO: revert catalog changes?
+		return fmt.Errorf("cannot update catalog: %w", err)
+	}
 	return nil
 }
+
+func commandMkdir(args []string, ctxt *context) error {
+	path := "/"
+	if len(args) > 0 {
+		path = args[0]
+	}
+	if err := catalog.NavigateCreateLast(ctxt.pwd, path); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	if err := updateCatalog(*ctxt.drive, ctxt.pwd.Root()); err != nil {
+		// TODO: revert catalog changes?
+		return fmt.Errorf("cannot update catalog: %w", err)
+	}
+	return nil
+}
+

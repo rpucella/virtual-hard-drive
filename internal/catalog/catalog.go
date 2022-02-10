@@ -81,6 +81,7 @@ func NewCatalog(flat []byte) (Catalog, error) {
 }
 
 func walkCreateDirectories(cat Catalog, path string, directories []string) (Catalog, error) {
+	// We can probably merge this function with NavigateCreateLast() below
 	var curr Catalog
 	var currPath string
 	for i, dir := range directories {
@@ -263,12 +264,15 @@ func DecomposePathFile(path string) ([]string, string) {
 	return content[:len(content) - 1], content[len(content) - 1]
 }
 
-func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
+func Navigate(cat Catalog, path string) (Catalog, error) {
 	cleanPath := path
 	if strings.HasSuffix(path, "/") {
 		cleanPath = path[:len(path) - 1]
 	}
 	dirs := DecomposePath(cleanPath)
+	if len(dirs) == 0 {
+		return nil, fmt.Errorf("empty path to navigate")
+	}
 	var curr Catalog = cat
 	for _, dir := range dirs {
 		if dir == "" {
@@ -294,6 +298,53 @@ func Navigate(cat Catalog, path string, isCreate bool) (Catalog, error) {
 	}
 	return curr, nil
 }
+
+func NavigateCreateLast(cat Catalog, path string) error {
+	cleanPath := path
+	if strings.HasSuffix(path, "/") {
+		cleanPath = path[:len(path) - 1]
+	}
+	dirs := DecomposePath(cleanPath)
+	if len(dirs) == 0 {
+		return fmt.Errorf("empty path to navigate")
+	}
+	lastDir := dirs[len(dirs) - 1]
+	if lastDir == "." || lastDir == ".." {
+		return fmt.Errorf("cannot create . or ..")
+	}
+	dirs = dirs[:len(dirs) - 1]
+	var curr Catalog = cat
+	for _, dir := range dirs {
+		if dir == "" {
+			// Reset to root!
+			curr = findRoot(curr)
+		} else if dir == "." {
+			// Do nothing!
+		} else if dir == ".." {
+			if curr.Parent() == nil {
+				return fmt.Errorf("root has no parent")
+			}
+			curr = curr.Parent()
+		} else {
+			newCurr, found := curr.Content()[dir]
+			if !found {
+				return fmt.Errorf("cannot find folder: %s", dir)
+			}
+			if !newCurr.IsDir() {
+				return fmt.Errorf("not a folder: %s", newCurr.Name())
+			}
+			curr = newCurr
+		}
+	}
+	// It better not exist.
+	if _, found := curr.Content()[lastDir]; found {
+		return fmt.Errorf("folder already exists: %s", lastDir)
+	}
+	dirObj := &Directory{lastDir, curr.Path() + lastDir + "/", make(map[string]Catalog), curr}
+	curr.SetContent(lastDir, dirObj)
+	return nil
+}	
+
 
 func NavigateFile(cat Catalog, path string) (Catalog, error) {
 	dirs, file := DecomposePathFile(path)
