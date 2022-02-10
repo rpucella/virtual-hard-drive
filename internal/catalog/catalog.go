@@ -4,7 +4,38 @@ package catalog
 import (
 	"fmt"
 	"strings"
+	
+	"rpucella.net/virtual-hard-drive/internal/storage"
 )
+
+type VFS interface {     // VFS = Virtual File System
+	AsFile() (File, bool)
+	AsDir() (Directory, bool)
+	AsRoot() (Root, bool)
+	AsDrive() (Drive, bool)
+	Name() string
+	Path() string
+	Parent() VFS
+	Root() Root
+	Print() 
+}
+
+type Root interface {
+	Name() string
+	Path() string
+	Parent() Root
+	Content() []Drive
+}
+
+type Drive interface {
+	Name() string
+//	Print()
+//	Content() []Catalog
+	Description() string
+	Storage() storage.Storage
+	FetchCatalog() (Catalog, error)
+	UpdateCatalog(Catalog) error
+}
 
 type Catalog interface {
 	IsFile() bool
@@ -12,11 +43,11 @@ type Catalog interface {
 	Name() string
 	Path() string
 	Parent() Catalog
+	Root() Catalog
+	Print()
+	UUID() string
 	Content() map[string]Catalog
 	SetContent(string, Catalog)
-	UUID() string
-	Root() Catalog
-	Print() 
 }
 
 type Directory struct {

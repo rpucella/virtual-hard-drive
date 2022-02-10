@@ -14,7 +14,7 @@ import (
 type context struct{
 	commands map[string]command
 	drives map[string]catalog.Drive
-	drive *catalog.Drive
+	drive catalog.Drive
 	pwd catalog.Catalog
 	exit bool         // Set to true to exit the main loop.
 }
@@ -58,7 +58,7 @@ func main() {
 		if ctxt.drive == nil {
 			fmt.Printf("\n(no drive) ")
 		} else {
-			fmt.Printf("\n%s:%s ", ctxt.drive.Name, ctxt.pwd.Path())
+			fmt.Printf("\n%s:%s ", ctxt.drive.Name(), ctxt.pwd.Path())
 		}
 		line, _ := reader.ReadString('\n')
 		fields := split(line) // strings.Fields(line)
