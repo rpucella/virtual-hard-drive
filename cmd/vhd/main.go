@@ -13,8 +13,8 @@ import (
 
 type context struct{
 	commands map[string]command
-	drives map[string]drive
-	drive *drive
+	drives map[string]catalog.Drive
+	drive *catalog.Drive
 	pwd catalog.Catalog
 	exit bool         // Set to true to exit the main loop.
 }
@@ -26,7 +26,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	commands := initializeCommands()
-	drives, err := readDrives()
+	drives, err := catalog.ReadDrives()
 	if err != nil {
 		panic(err)
 	}
@@ -58,7 +58,7 @@ func main() {
 		if ctxt.drive == nil {
 			fmt.Printf("\n(no drive) ")
 		} else {
-			fmt.Printf("\n%s:%s ", ctxt.drive.name, ctxt.pwd.Path())
+			fmt.Printf("\n%s:%s ", ctxt.drive.Name, ctxt.pwd.Path())
 		}
 		line, _ := reader.ReadString('\n')
 		fields := split(line) // strings.Fields(line)

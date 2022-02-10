@@ -1,5 +1,5 @@
 
-package main
+package catalog
 
 import (
 	"fmt"
@@ -11,67 +11,68 @@ import (
         "gopkg.in/yaml.v3"
 	
 	"rpucella.net/virtual-hard-drive/internal/storage"
-	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
 const CONFIG_FOLDER = ".vhd"
 const CONFIG_FILE = "config.yml"
 const CONFIG_CATALOG = "catalog"
 
-type Config struct {
+type config struct {
 	Type string
 	Location string
 	Description string
 }
 
-type drive struct{
-	name string
-	description string
-	catalog string
-	storage storage.Storage
+type Drive struct{
+	Name string
+	Description string
+	Catalog string
+	//catalogPath string
+	//catalog *Catalog
+	Storage storage.Storage
 }
 
 // Store catalogs locally.
 
-func fetchCatalog(dr drive) (catalog.Catalog, error) {
-	content, err := ioutil.ReadFile(dr.catalog)
+func FetchCatalog(dr Drive) (Catalog, error) {
+	content, err := ioutil.ReadFile(dr.Catalog)
 	if err != nil {
 		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
 	}
-	cat, err := catalog.NewCatalog(content)
+	cat, err := NewCatalog(content)
 	return cat, nil
 }
 
-func updateCatalog(dr drive, cat catalog.Catalog) error {
-	flatCat := catalog.Flatten(cat)
+func UpdateCatalog(dr Drive, cat Catalog) error {
+	flatCat := Flatten(cat)
 	catFile := []byte(strings.Join(flatCat, "\n") + "\n")
 	// Have we created a .tmp backup backup?
 	made_tmp := false
 	// Backup catalog.bak into catalog.tmp if it exists.
-	if _, err := os.Stat(dr.catalog + ".bak"); err == nil {
+	if _, err := os.Stat(dr.Catalog + ".bak"); err == nil {
 		// Backup exists, so keep it.
-		if err := os.Rename(dr.catalog + ".bak", dr.catalog + ".tmp"); err != nil {
+		if err := os.Rename(dr.Catalog + ".bak", dr.Catalog + ".tmp"); err != nil {
 			return fmt.Errorf("cannot temporarily preserve backup catalog")
 		}
 		made_tmp = true
 	}
 	// Backup catalog into catalog.bak.
-	if err := os.Rename(dr.catalog, dr.catalog + ".bak"); err != nil {
+	if err := os.Rename(dr.Catalog, dr.Catalog + ".bak"); err != nil {
 		if made_tmp { 
-			if err2 := os.Rename(dr.catalog + ".tmp", dr.catalog + ".bak"); err2 != nil {
+			if err2 := os.Rename(dr.Catalog + ".tmp", dr.Catalog + ".bak"); err2 != nil {
 				return fmt.Errorf("cannot create backup catalog (%w) or restore tmp backup (%w)", err, err2)
 			}
 		}
 		return fmt.Errorf("cannot create backup catalog: %w", err)
 	}
 	// Write catalog.
-	err := ioutil.WriteFile(dr.catalog, catFile, 0600)
+	err := ioutil.WriteFile(dr.Catalog, catFile, 0600)
 	if err != nil {
-		if err2 := os.Rename(dr.catalog + ".bak", dr.catalog); err2 != nil {
+		if err2 := os.Rename(dr.Catalog + ".bak", dr.Catalog); err2 != nil {
 			return fmt.Errorf("cannot update catalog (%w) or restore backup (%w)", err, err2)
 		}
 		if made_tmp {
-			if err2 := os.Rename(dr.catalog + ".tmp", dr.catalog + ".bak"); err2 != nil {
+			if err2 := os.Rename(dr.Catalog + ".tmp", dr.Catalog + ".bak"); err2 != nil {
 				return fmt.Errorf("cannot update catalog (%w) or restore tmp backup (%w)", err, err2)
 			}
 		}
@@ -79,14 +80,14 @@ func updateCatalog(dr drive, cat catalog.Catalog) error {
 	}
 	// Remove catalog.tmp since no longer needed.
 	if made_tmp {
-		if err := os.Remove(dr.catalog + ".tmp"); err != nil {
+		if err := os.Remove(dr.Catalog + ".tmp"); err != nil {
 			return fmt.Errorf("cannot remote tmp backup: %w", err)
 		}
 	}
 	return nil
 }
 
-func readDrives() (map[string]drive, error) {
+func ReadDrives() (map[string]Drive, error) {
 	home, err := os.UserHomeDir()
 	if err != nil { 
 		return nil, fmt.Errorf("cannot get home directory: %v", err)
@@ -107,13 +108,13 @@ func readDrives() (map[string]drive, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot read %s directory: %w", configFolder, err)
 	}
-	drives:= make(map[string]drive)
+	drives:= make(map[string]Drive)
 	for _, f := range files {
 		if f.IsDir() {
 			yamlFile, err := ioutil.ReadFile(path.Join(configFolder, f.Name(), CONFIG_FILE))
 			// Skip errors silently.
 			if err == nil {
-				config := Config{}
+				config := config{}
 				err := yaml.Unmarshal(yamlFile, &config)
 				// Again, skip errors silently.
 				if err == nil {
@@ -127,7 +128,7 @@ func readDrives() (map[string]drive, error) {
 						continue
 					}
 					catalogPath := path.Join(configFolder, f.Name(), CONFIG_CATALOG)
-					drives[f.Name()] = drive{f.Name(), config.Description, catalogPath, store}
+					drives[f.Name()] = Drive{f.Name(), config.Description, catalogPath, store}
 				}
 			}
 		}

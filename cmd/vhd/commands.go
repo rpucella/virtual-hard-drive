@@ -73,9 +73,9 @@ func commandDrive(args []string, ctxt *context) error {
 		sort.Strings(keys)
 		width := maxLength(keys)
 		for _, k := range keys {
-			fmt.Printf("%*s   %s\n", -width, k, ctxt.drives[k].storage.Name())
-			if ctxt.drives[k].description != "" {
-				fmt.Printf("%*s   %s\n", -width, "", ctxt.drives[k].description)
+			fmt.Printf("%*s   %s\n", -width, k, ctxt.drives[k].Storage.Name())
+			if ctxt.drives[k].Description != "" {
+				fmt.Printf("%*s   %s\n", -width, "", ctxt.drives[k].Description)
 			}
 		}
 		return nil
@@ -85,13 +85,13 @@ func commandDrive(args []string, ctxt *context) error {
 	if !found {
 		return fmt.Errorf("cannot find drive: %s", newName)
 	}
-	fmt.Printf("Loading catalog for %s\n", newDrive.storage.Name())
-	cat, err := fetchCatalog(newDrive)
+	fmt.Printf("Loading catalog for %s\n", newDrive.Storage.Name())
+	cat, err := catalog.FetchCatalog(newDrive)
 	if err != nil {
 		return fmt.Errorf("cannot fetch catalog: %s", newName)
 	}
-	if newDrive.description != "" {
-		fmt.Println(newDrive.description)
+	if newDrive.Description != "" {
+		fmt.Println(newDrive.Description)
 	}
 	ctxt.drive = &newDrive
 	ctxt.pwd = cat	
@@ -168,11 +168,11 @@ func commandGet(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	objectName, err := ctxt.drive.storage.UUIDToPath(fileObj.UUID())
+	objectName, err := ctxt.drive.Storage.UUIDToPath(fileObj.UUID())
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	err = ctxt.drive.storage.DownloadFile(objectName, fileObj.Name())
+	err = ctxt.drive.Storage.DownloadFile(objectName, fileObj.Name())
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
@@ -197,19 +197,19 @@ func commandPut(args []string, ctxt *context) error {
 		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.Path())
 	}
 	newUUID := uuid.NewString()
-	objectName, err := ctxt.drive.storage.UUIDToPath(newUUID)
+	objectName, err := ctxt.drive.Storage.UUIDToPath(newUUID)
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
 	// Upload to storage.
-	err = ctxt.drive.storage.UploadFile(srcFilePath, objectName)
+	err = ctxt.drive.Storage.UploadFile(srcFilePath, objectName)
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
 	catalog.AddFile(destFolder, srcFileName, newUUID)
-	if err := updateCatalog(*ctxt.drive, destFolder.Root()); err != nil {
+	if err := catalog.UpdateCatalog(*ctxt.drive, destFolder.Root()); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)
 	}
@@ -224,7 +224,7 @@ func commandMkdir(args []string, ctxt *context) error {
 	if err := catalog.NavigateCreateLast(ctxt.pwd, path); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	if err := updateCatalog(*ctxt.drive, ctxt.pwd.Root()); err != nil {
+	if err := catalog.UpdateCatalog(*ctxt.drive, ctxt.pwd.Root()); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)
 	}
