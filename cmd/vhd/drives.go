@@ -45,18 +45,51 @@ func fetchCatalog(dr drive) (catalog.Catalog, error) {
 func updateCatalog(dr drive, cat catalog.Catalog) error {
 	flatCat := catalog.Flatten(cat)
 	catFile := []byte(strings.Join(flatCat, "\n") + "\n")
-	// TODO: Backup old catalog.
+	// Have we created a .tmp backup backup?
+	made_tmp := false
+	// Backup catalog.bak into catalog.tmp if it exists.
+	if _, err := os.Stat(dr.catalog + ".bak"); err == nil {
+		// Backup exists, so keep it.
+		if err := os.Rename(dr.catalog + ".bak", dr.catalog + ".tmp"); err != nil {
+			return fmt.Errorf("cannot temporarily preserve backup catalog")
+		}
+		made_tmp = true
+	}
+	// Backup catalog into catalog.bak.
+	if err := os.Rename(dr.catalog, dr.catalog + ".bak"); err != nil {
+		if made_tmp { 
+			if err2 := os.Rename(dr.catalog + ".tmp", dr.catalog + ".bak"); err2 != nil {
+				return fmt.Errorf("cannot create backup catalog (%w) or restore tmp backup (%w)", err, err2)
+			}
+		}
+		return fmt.Errorf("cannot create backup catalog: %w", err)
+	}
+	// Write catalog.
 	err := ioutil.WriteFile(dr.catalog, catFile, 0600)
 	if err != nil {
+		if err2 := os.Rename(dr.catalog + ".bak", dr.catalog); err2 != nil {
+			return fmt.Errorf("cannot update catalog (%w) or restore backup (%w)", err, err2)
+		}
+		if made_tmp {
+			if err2 := os.Rename(dr.catalog + ".tmp", dr.catalog + ".bak"); err2 != nil {
+				return fmt.Errorf("cannot update catalog (%w) or restore tmp backup (%w)", err, err2)
+			}
+		}
 		return fmt.Errorf("cannot update catalog: %s", err)
+	}
+	// Remove catalog.tmp since no longer needed.
+	if made_tmp {
+		if err := os.Remove(dr.catalog + ".tmp"); err != nil {
+			return fmt.Errorf("cannot remote tmp backup: %w", err)
+		}
 	}
 	return nil
 }
 
 func readDrives() (map[string]drive, error) {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return nil, fmt.Errorf("cannot read HOME environment variable")
+	home, err := os.UserHomeDir()
+	if err != nil { 
+		return nil, fmt.Errorf("cannot get home directory: %v", err)
 	}
 	configFolder := path.Join(home, CONFIG_FOLDER)
 	info, err := os.Stat(configFolder)
