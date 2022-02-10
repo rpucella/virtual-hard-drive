@@ -73,6 +73,9 @@ func commandDrive(args []string, ctxt *context) error {
 		width := maxLength(keys)
 		for _, k := range keys {
 			fmt.Printf("%*s   %s\n", -width, k, ctxt.drives[k].storage.Name())
+			if ctxt.drives[k].description != "" {
+				fmt.Printf("%*s   %s\n", -width, "", ctxt.drives[k].description)
+			}
 		}
 		return nil
 	}
@@ -85,6 +88,9 @@ func commandDrive(args []string, ctxt *context) error {
 	cat, err := fetchCatalog(newDrive)
 	if err != nil {
 		return fmt.Errorf("cannot fetch catalog: %s", newName)
+	}
+	if newDrive.description != "" {
+		fmt.Println(newDrive.description)
 	}
 	ctxt.drive = &newDrive
 	ctxt.pwd = cat	

@@ -21,10 +21,12 @@ const CONFIG_CATALOG = "catalog"
 type Config struct {
 	Type string
 	Location string
+	Description string
 }
 
 type drive struct{
 	name string
+	description string
 	catalog string
 	storage storage.Storage
 }
@@ -59,7 +61,6 @@ func readDrives() (map[string]drive, error) {
 	configFolder := path.Join(home, CONFIG_FOLDER)
 	info, err := os.Stat(configFolder)
 	if os.IsNotExist(err) {
-		fmt.Println("creating config folder")
 		err := os.Mkdir(configFolder, 0700)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create %s directory: %w", configFolder, err)
@@ -69,7 +70,6 @@ func readDrives() (map[string]drive, error) {
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("path %s not a directory", configFolder)
 	}
-	fmt.Println("reading config folder")
 	files, err := ioutil.ReadDir(configFolder)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read %s directory: %w", configFolder, err)
@@ -77,7 +77,6 @@ func readDrives() (map[string]drive, error) {
 	drives:= make(map[string]drive)
 	for _, f := range files {
 		if f.IsDir() {
-			fmt.Println("found", f.Name())
 			yamlFile, err := ioutil.ReadFile(path.Join(configFolder, f.Name(), CONFIG_FILE))
 			// Skip errors silently.
 			if err == nil {
@@ -95,7 +94,7 @@ func readDrives() (map[string]drive, error) {
 						continue
 					}
 					catalogPath := path.Join(configFolder, f.Name(), CONFIG_CATALOG)
-					drives[f.Name()] = drive{f.Name(), catalogPath, store}
+					drives[f.Name()] = drive{f.Name(), config.Description, catalogPath, store}
 				}
 			}
 		}
