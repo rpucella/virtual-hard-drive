@@ -47,69 +47,95 @@ func NewCatalog(flat []byte) (Catalog, error) {
 			if err != nil {
 				return nil, fmt.Errorf("cannot parse catalog: %w", err)
 			}
-			directories, file, err := splitPath(path)
-			if err != nil {
-				return nil, fmt.Errorf("cannot parse catalog: %w", err)
-			}
-			var curr Catalog
-			var currPath string
-			for i, dir := range directories {
-				if curr == nil {
-					// First directory should be empty
-					if i != 0 || dir != "" {
-						return nil, fmt.Errorf("path should be absolute %s", path)
-					}
-					curr = cat
-					currPath = "/"
-				} else if curr.IsFile() {
-					return nil, fmt.Errorf("file in middle of path %s", path)
-				} else if curr.IsDir() {
-					currPath = currPath + dir + "/"
-					// does the name exist?
-					content := curr.Content()
-					dirObj, ok := content[dir]
-					if ok {
-						curr = dirObj
-					} else {
-						// Need to create the directory!
-						dirObj = &Directory{dir, currPath, make(map[string]Catalog), curr}
-						curr.SetContent(dir, dirObj)
-						curr = dirObj
-					}
-				} else {
-					return nil, fmt.Errorf("unknown catalog object %v", curr)
+			if uuid == "" {
+				// Directory only.
+				directories, err := splitPath(path)
+				if err != nil {
+					return nil, fmt.Errorf("cannot parse catalog: %w", err)
 				}
+				if _, err := walkCreateDirectories(cat, path, directories); err != nil {
+					return nil, fmt.Errorf("cannot parse catalog: %w", err)
+				}
+			} else { 
+				directories, file, err := splitPathFile(path)
+				if err != nil {
+					return nil, fmt.Errorf("cannot parse catalog: %w", err)
+				}
+				curr, err := walkCreateDirectories(cat, path, directories)
+				currPath := curr.Path()
+				// At this point, curr is in the directory where we want the file.
+				if curr.IsFile() {
+					return nil, fmt.Errorf("file in middle of path %s", path)
+				}
+				content := curr.Content()
+				_, exists := content[file]
+				if exists {
+					return nil, fmt.Errorf("file %s already exists in path %s", file, path)
+				}
+				fileObj := &File{file, currPath + file, uuid, curr}
+				curr.SetContent(file, fileObj)
 			}
-			// At this point, curr is in the directory where we want the file.
-			if curr.IsFile() {
-				return nil, fmt.Errorf("file in middle of path %s", path)
-			}
-			content := curr.Content()
-			_, exists := content[file]
-			if exists {
-				return nil, fmt.Errorf("file %s already exists in path %s", file, path)
-			}
-			fileObj := &File{file, currPath + file, uuid, curr}
-			curr.SetContent(file, fileObj)
 		}
 	}
 	return cat, nil
 }
 
+func walkCreateDirectories(cat Catalog, path string, directories []string) (Catalog, error) {
+	var curr Catalog
+	var currPath string
+	for i, dir := range directories {
+		if curr == nil {
+			// First directory should be empty
+			if i != 0 || dir != "" {
+				return nil, fmt.Errorf("path should be absolute %s", path)
+			}
+			curr = cat
+			currPath = "/"
+		} else if curr.IsFile() {
+			return nil, fmt.Errorf("file in middle of path %s", path)
+		} else if curr.IsDir() {
+			currPath = currPath + dir + "/"
+			// does the name exist?
+			content := curr.Content()
+			dirObj, ok := content[dir]
+			if ok {
+				curr = dirObj
+			} else {
+				// Need to create the directory!
+				dirObj = &Directory{dir, currPath, make(map[string]Catalog), curr}
+				curr.SetContent(dir, dirObj)
+				curr = dirObj
+			}
+		} else {
+			return nil, fmt.Errorf("unknown catalog object %v", curr)
+		}
+	}
+	return curr, nil
+}
+
 func splitLine(line string) (string, string, error) {
 	ss := strings.Split(line, ":")
-	if len(ss) != 2 {
+	if len(ss) < 1 || len(ss) > 2 {
 		return "", "", fmt.Errorf("wrong number of fields in line %d", len(ss))
 	}
+	if len(ss) == 1 {
+		// Directory.
+		return ss[0], "", nil
+	}
+	// File.
 	return ss[0], ss[1], nil
 }
 
-func splitPath(path string) ([]string, string, error) {
+func splitPathFile(path string) ([]string, string, error) {
 	ss := strings.Split(path, "/")
 	if len(ss) < 1 {
 		return nil, "", fmt.Errorf("malformed path %s", path)
 	}
 	return ss[:len(ss) - 1], ss[len(ss) - 1], nil
+}
+
+func splitPath(path string) ([]string, error) {
+	return strings.Split(path, "/"), nil
 }
 
 func spaces(n int) string {
@@ -324,6 +350,10 @@ func flatten(cat Catalog, prefix string) []string {
 		line := fmt.Sprintf("%s:%s", prefix, cat.UUID())
 		result = append(result, line)
 	} else {
+		if prefix != "" {
+			line := fmt.Sprintf("%s", prefix)
+			result = append(result, line)
+		}
 		for k, v := range cat.Content() {
 			newPrefix := fmt.Sprintf("%s/%s", prefix, k)
 			newLines := flatten(v, newPrefix)
