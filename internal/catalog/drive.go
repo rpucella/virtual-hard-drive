@@ -28,6 +28,8 @@ type drive struct{
 	description string
 	catalogPath string    // This could be kept private.
 	storage storage.Storage
+	top Catalog          // This is a horrible name.
+	root Catalog
 	// Add possible restriction flags (i.e., warn in case of too recent deletes, etc)
 }
 
@@ -43,19 +45,136 @@ func (d *drive) Storage() storage.Storage {
 	return d.storage
 }
 
-// Store catalogs locally.
-
-func (dr *drive) FetchCatalog() (Catalog, error) {
-	content, err := ioutil.ReadFile(dr.catalogPath)
-	if err != nil {
-		return nil, fmt.Errorf("cannot fetch catalog: %w", err)
-	}
-	cat, err := NewCatalog(content)
-	return cat, nil
+func (d *drive) AsCatalog() Catalog {
+	return d
 }
 
-func (dr *drive) UpdateCatalog(cat Catalog) error {
-	flatCat := Flatten(cat)
+func (d *drive) AsDrive() Drive {
+	return d
+}
+
+func (r *drive) IsFile() bool {
+	return false
+}
+
+func (r *drive) IsDir() bool {
+	return true
+}
+
+func (r *drive) LocalPath() string {
+	return fmt.Sprintf("/%s/", r.name)
+}
+
+func (r *drive) FullPath() string {
+	return fmt.Sprintf("/%s/", r.name)
+}
+
+func (r *drive) Parent() Catalog {
+	return r.root
+}
+
+func (r *drive) Root() Catalog {
+	return r.root
+}
+
+func (r *drive) Drive() Drive {
+	return r
+}
+
+func (r *drive) Print() {
+	fmt.Printf("<Drive %s>\n", r.name)
+}
+
+func (r *drive) UUID() string {
+	return ""
+}
+
+func (r *drive) ContentList() []string {
+	if r.top == nil {
+		if err := fetchCatalog(r); err != nil {
+			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+		}
+	}
+	return r.top.ContentList()
+}
+
+func (r *drive) GetContent(field string) (Catalog, bool) {
+	if r.top == nil {
+		if err := fetchCatalog(r); err != nil {
+			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+		}
+	}
+	result, found := r.top.GetContent(field)
+	return result, found
+}
+
+func (r *drive) SetContent(name string, value Catalog) {
+	// Do nothing silently?
+	if r.top == nil {
+		if err := fetchCatalog(r); err != nil {
+			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+		}
+	}
+	r.top.SetContent(name, value)
+	// Call to UpdateCatalog?
+}
+
+// Store catalogs locally.
+
+func fetchCatalog(dr *drive) error {
+	flat, err := ioutil.ReadFile(dr.catalogPath)
+	if err != nil {
+		return fmt.Errorf("cannot fetch catalog: %w", err)
+	}
+	// Convert to a string first.
+	strFlat := string(flat)
+	///fmt.Printf("Flat: [%s]\n", strFlat)
+	lines := strings.Split(strFlat, "\n")
+	root := dr.root
+	dr.top = &Directory{"", "/", make(map[string]Catalog), root}
+	cat := dr
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if len(line) > 0 {
+			// Skip empty lines.
+			path, uuid, err := splitLine(line)
+			if err != nil {
+				return fmt.Errorf("cannot parse catalog: %w", err)
+			}
+			if uuid == "" {
+				// Directory only.
+				directories, err := splitPath(path)
+				if err != nil {
+					return fmt.Errorf("cannot parse catalog: %w", err)
+				}
+				if _, err := walkCreateDirectories(cat, path, directories); err != nil {
+					return fmt.Errorf("cannot parse catalog: %w", err)
+				}
+			} else { 
+				directories, file, err := splitPathFile(path)
+				if err != nil {
+					return fmt.Errorf("cannot parse catalog: %w", err)
+				}
+				curr, err := walkCreateDirectories(cat, path, directories)
+				currPath := curr.LocalPath()
+				// At this point, curr is in the directory where we want the file.
+				if curr.IsFile() {
+					return fmt.Errorf("file in middle of path %s", path)
+				}
+				_, exists := curr.GetContent(file)
+				if exists {
+					return fmt.Errorf("file %s already exists in path %s", file, path)
+				}
+				fileObj := &File{file, currPath + file, uuid, curr}
+				curr.SetContent(file, fileObj)
+			}
+		}
+	}
+	return nil
+}
+
+func (dr *drive) UpdateCatalog() error {
+	flatCat := Flatten(dr.top)
 	catFile := []byte(strings.Join(flatCat, "\n") + "\n")
 	// Have we created a .tmp backup backup?
 	made_tmp := false
@@ -98,7 +217,7 @@ func (dr *drive) UpdateCatalog(cat Catalog) error {
 	return nil
 }
 
-func ReadDrives() (map[string]Drive, error) {
+func readDrives(root Root) (map[string]Drive, error) {
 	home, err := os.UserHomeDir()
 	if err != nil { 
 		return nil, fmt.Errorf("cannot get home directory: %v", err)
@@ -139,7 +258,7 @@ func ReadDrives() (map[string]Drive, error) {
 						continue
 					}
 					catalogPath := path.Join(configFolder, f.Name(), CONFIG_CATALOG)
-					drives[f.Name()] = &drive{f.Name(), config.Description, catalogPath, store}
+					drives[f.Name()] = &drive{f.Name(), config.Description, catalogPath, store, nil, root.AsCatalog()}
 				}
 			}
 		}

@@ -33,7 +33,7 @@ func (s LocalFileSystem) CatalogToPath(catalog string) (string, error) {
 }
 
 func (s LocalFileSystem) ListFiles() ([]string, error) {
-	result := make([]string, 10)
+	result := make([]string, 0, 10)
 	accumulate := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

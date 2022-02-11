@@ -32,7 +32,7 @@ func initializeCommands() map[string]command {
 	commands := make(map[string]command)
 	commands["exit"] = command{0, 0, commandQuit, "exit", "Bail out", false}
 	commands["help"] = command{0, 0, commandHelp, "help", "List available commands", false}
-	commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive", false}
+	//commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive", false}
 	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder", true}
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder", true}
 	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information", true}
@@ -63,32 +63,35 @@ func commandQuit(args []string, ctxt *context) error {
 	return nil
 }
 
+/*
 func commandDrive(args []string, ctxt *context) error {
 	if len(args) == 0 {
 		// List available drives.
-		keys := make([]string, 0, len(ctxt.drives))
-		for k := range ctxt.drives {
+		keys := make([]string, 0, len(ctxt.root.Drives()))
+		for k := range ctxt.root.Drives() {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		width := maxLength(keys)
 		for _, k := range keys {
-			fmt.Printf("%*s   %s\n", -width, k, ctxt.drives[k].Storage().Name())
-			if ctxt.drives[k].Description() != "" {
-				fmt.Printf("%*s   %s\n", -width, "", ctxt.drives[k].Description())
+			fmt.Printf("%*s   %s\n", -width, k, ctxt.root.Drives()[k].Storage().Name())
+			if ctxt.root.Drives()[k].Description() != "" {
+				fmt.Printf("%*s   %s\n", -width, "", ctxt.root.Drives()[k].Description())
 			}
 		}
 		return nil
 	}
 	newName := args[0]
-	newDrive, found := ctxt.drives[newName]
+	newDrive, found := ctxt.root.Drives()[newName]
 	if !found {
 		return fmt.Errorf("cannot find drive: %s", newName)
 	}
 	fmt.Printf("Loading catalog for %s\n", newDrive.Storage().Name())
-	cat, err := newDrive.FetchCatalog()
-	if err != nil {
-		return fmt.Errorf("cannot fetch catalog: %s", newName)
+	cat := newDrive.AsCatalog()
+	// Force the fetch.
+	
+	if result := cat.Content(); result == nil {
+		return fmt.Errorf("cannot switch to drive %s", newName)
 	}
 	if newDrive.Description() != "" {
 		fmt.Println(newDrive.Description())
@@ -97,6 +100,7 @@ func commandDrive(args []string, ctxt *context) error {
 	ctxt.pwd = cat	
 	return nil
 }
+*/
 
 func commandLs(args []string, ctxt *context) error {
 	curr := ctxt.pwd
@@ -107,9 +111,10 @@ func commandLs(args []string, ctxt *context) error {
 		}
 		curr = newCurr
 	}
-	dirs := make([]string, 0, len(curr.Content()))
-	files := make([]string, 0, len(curr.Content()))
-	for _, sub := range curr.Content() {
+	dirs := make([]string, 0, len(curr.ContentList()))
+	files := make([]string, 0, len(curr.ContentList()))
+	for _, k := range curr.ContentList() {
+		sub, _ := curr.GetContent(k)
 		if sub.IsDir() {
 			dirs = append(dirs, sub.Name())
 		} else {
@@ -123,7 +128,8 @@ func commandLs(args []string, ctxt *context) error {
 	}
 	width := maxLength(files)
 	for _, name := range files {
-		fmt.Printf("%*s     %s\n", -width, name, curr.Content()[name].UUID())
+		file, _ := curr.GetContent(name)
+		fmt.Printf("%*s     %s\n", -width, name, file.UUID())
 	}
 	return nil
 }
@@ -168,15 +174,15 @@ func commandGet(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	objectName, err := ctxt.drive.Storage().UUIDToPath(fileObj.UUID())
+	objectName, err := fileObj.Drive().Storage().UUIDToPath(fileObj.UUID())
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	err = ctxt.drive.Storage().DownloadFile(objectName, fileObj.Name())
+	err = fileObj.Drive().Storage().DownloadFile(objectName, fileObj.Name())
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	fmt.Printf("Object %s downloaded to %s\n", objectName, fileObj.Name())
+	fmt.Printf("File %s downloaded to %s\n", objectName, fileObj.Name())
 	return nil
 }
 
@@ -191,25 +197,29 @@ func commandPut(args []string, ctxt *context) error {
 		}
 		destFolder = newDestFolder
 	}
-	_, found := destFolder.Content()[srcFileName]
+	_, found := destFolder.GetContent(srcFileName)
 	if found {
 		// Confirm overwrite? Or force user to delete first?
-		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.Path())
+		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.FullPath())
 	}
 	newUUID := uuid.NewString()
-	objectName, err := ctxt.drive.Storage().UUIDToPath(newUUID)
+	drive := destFolder.Drive()
+	if drive == nil {
+		return fmt.Errorf("no drive for folder: %s", destFolder.FullPath())
+	}
+	objectName, err := drive.Storage().UUIDToPath(newUUID)
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
 	// Upload to storage.
-	err = ctxt.drive.Storage().UploadFile(srcFilePath, objectName)
+	err = drive.Storage().UploadFile(srcFilePath, objectName)
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
 	catalog.AddFile(destFolder, srcFileName, newUUID)
-	if err := ctxt.drive.UpdateCatalog(destFolder.Root()); err != nil {
+	if err := drive.UpdateCatalog(); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)
 	}
@@ -221,10 +231,15 @@ func commandMkdir(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	if err := catalog.NavigateCreateLast(ctxt.pwd, path); err != nil {
+	newFolder, err := catalog.NavigateCreateLast(ctxt.pwd, path)
+	if err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	if err := ctxt.drive.UpdateCatalog(ctxt.pwd.Root()); err != nil {
+	drive := newFolder.Drive()
+	if drive == nil {
+		return fmt.Errorf("no drive for creating folder")
+	}
+	if err := drive.UpdateCatalog(); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)
 	}

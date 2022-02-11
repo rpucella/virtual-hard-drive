@@ -8,45 +8,33 @@ import (
 	"rpucella.net/virtual-hard-drive/internal/storage"
 )
 
-type VFS interface {     // VFS = Virtual File System
-	AsFile() (File, bool)
-	AsDir() (Directory, bool)
-	AsRoot() (Root, bool)
-	AsDrive() (Drive, bool)
-	Name() string
-	Path() string
-	Parent() VFS
-	Root() Root
-	Print() 
-}
-
 type Root interface {
-	Name() string
-	Path() string
-	Parent() Root
-	Content() []Drive
+	Drives() map[string]Drive
+	AsCatalog() Catalog
 }
 
 type Drive interface {
 	Name() string
-//	Print()
-//	Content() []Catalog
 	Description() string
 	Storage() storage.Storage
-	FetchCatalog() (Catalog, error)
-	UpdateCatalog(Catalog) error
+	UpdateCatalog() error
+	AsCatalog() Catalog
 }
 
 type Catalog interface {
 	IsFile() bool
 	IsDir() bool
+	AsDrive() Drive
 	Name() string
-	Path() string
+	LocalPath() string   // This is the local path of the entry.
+	FullPath() string    // Full path including drive name.    
 	Parent() Catalog
 	Root() Catalog
+	Drive() Drive        // Returns the drive of this node (if any).
 	Print()
 	UUID() string
-	Content() map[string]Catalog
+	ContentList() []string
+	GetContent(string) (Catalog, bool)
 	SetContent(string, Catalog)
 }
 
@@ -62,53 +50,6 @@ type File struct {
 	path string
 	uuid string
 	parent Catalog
-}
-
-func NewCatalog(flat []byte) (Catalog, error) {
-	// Convert to a string first.
-	strFlat := string(flat)
-	///fmt.Printf("Flat: [%s]\n", strFlat)
-	lines := strings.Split(strFlat, "\n")
-	var cat Catalog = &Directory{"", "/", make(map[string]Catalog), nil}
-	for _, rawLine := range lines {
-		line := strings.TrimSpace(rawLine)
-		if len(line) > 0 {
-			// Skip empty lines.
-			path, uuid, err := splitLine(line)
-			if err != nil {
-				return nil, fmt.Errorf("cannot parse catalog: %w", err)
-			}
-			if uuid == "" {
-				// Directory only.
-				directories, err := splitPath(path)
-				if err != nil {
-					return nil, fmt.Errorf("cannot parse catalog: %w", err)
-				}
-				if _, err := walkCreateDirectories(cat, path, directories); err != nil {
-					return nil, fmt.Errorf("cannot parse catalog: %w", err)
-				}
-			} else { 
-				directories, file, err := splitPathFile(path)
-				if err != nil {
-					return nil, fmt.Errorf("cannot parse catalog: %w", err)
-				}
-				curr, err := walkCreateDirectories(cat, path, directories)
-				currPath := curr.Path()
-				// At this point, curr is in the directory where we want the file.
-				if curr.IsFile() {
-					return nil, fmt.Errorf("file in middle of path %s", path)
-				}
-				content := curr.Content()
-				_, exists := content[file]
-				if exists {
-					return nil, fmt.Errorf("file %s already exists in path %s", file, path)
-				}
-				fileObj := &File{file, currPath + file, uuid, curr}
-				curr.SetContent(file, fileObj)
-			}
-		}
-	}
-	return cat, nil
 }
 
 func walkCreateDirectories(cat Catalog, path string, directories []string) (Catalog, error) {
@@ -128,8 +69,7 @@ func walkCreateDirectories(cat Catalog, path string, directories []string) (Cata
 		} else if curr.IsDir() {
 			currPath = currPath + dir + "/"
 			// does the name exist?
-			content := curr.Content()
-			dirObj, ok := content[dir]
+			dirObj, ok := curr.GetContent(dir)
 			if ok {
 				curr = dirObj
 			} else {
@@ -179,7 +119,8 @@ func printLevel(curr Catalog, indent int) {
 		fmt.Printf("%s%s\n", spaces(indent), curr.Name())
 	} else if curr.IsDir() {
 		fmt.Printf("%s%s/\n", spaces(indent), curr.Name())
-		for _, sub := range curr.Content() {
+		for _, k := range curr.ContentList() {
+			sub, _ := curr.GetContent(k)
 			printLevel(sub, indent + 2)
 		}
 	}
@@ -197,20 +138,41 @@ func (d *Directory) IsDir() bool {
 	return true
 }
 
+func (d *Directory) AsDrive() Drive {
+	return nil
+}
+
+func (d *Directory) Drive() Drive {
+	return findDrive(d)
+}
+
 func (d *Directory) Name() string {
 	return d.name
 }
 
-func (d *Directory) Path() string {
+func (d *Directory) LocalPath() string {
 	return d.path
+}
+
+func (d *Directory) FullPath() string {
+	return fmt.Sprintf("/%s%s", d.Drive().Name(), d.path)
 }
 
 func (d *Directory) Parent() Catalog {
 	return d.parent
 }
 
-func (d *Directory) Content() map[string]Catalog {
-	return d.content
+func (d *Directory) ContentList() []string {
+	result := make([]string, 0, len(d.content))
+	for k, _ := range d.content {
+		result = append(result, k)
+	}
+	return result
+}
+
+func (d *Directory) GetContent(field string) (Catalog, bool) {
+	result, found := d.content[field]
+	return result, found
 }
 
 func (d *Directory) SetContent(field string, value Catalog) {
@@ -234,20 +196,36 @@ func (f *File) IsDir() bool {
 	return false
 }
 
+func (f *File) AsDrive() Drive {
+	return nil
+}
+
+func (f *File) Drive() Drive {
+	return findDrive(f)
+}
+
 func (f *File) Name() string {
 	return f.name
 }
 
-func (f *File) Path() string {
+func (f *File) LocalPath() string {
 	return f.path
+}
+
+func (f *File) FullPath() string {
+	return fmt.Sprintf("/%s%s", f.Drive().Name(), f.path)
 }
 
 func (f *File) Parent() Catalog {
 	return f.parent
 }
 
-func (f *File) Content() map[string]Catalog {
+func (f *File) ContentList() []string {
 	return nil
+}
+
+func (f *File) GetContent(field string) (Catalog, bool) {
+	return nil, false
 }
 
 func (f *File) SetContent(field string, value Catalog) {
@@ -270,6 +248,19 @@ func findRoot(cat Catalog) Catalog {
 	for {
 		if curr.Parent() == nil {
 			return curr
+		}
+		curr = curr.Parent()
+	}
+}
+
+func findDrive(cat Catalog) Drive {
+	curr := cat
+	for {
+		if curr == nil {
+			return nil
+		}
+		if drive := curr.AsDrive(); drive != nil {
+			return drive
 		}
 		curr = curr.Parent()
 	}
@@ -317,7 +308,7 @@ func Navigate(cat Catalog, path string) (Catalog, error) {
 			}
 			curr = curr.Parent()
 		} else {
-			newCurr, found := curr.Content()[dir]
+			newCurr, found := curr.GetContent(dir)
 			if !found {
 				return nil, fmt.Errorf("cannot find folder: %s", dir)
 			}
@@ -330,18 +321,18 @@ func Navigate(cat Catalog, path string) (Catalog, error) {
 	return curr, nil
 }
 
-func NavigateCreateLast(cat Catalog, path string) error {
+func NavigateCreateLast(cat Catalog, path string) (Catalog, error) {
 	cleanPath := path
 	if strings.HasSuffix(path, "/") {
 		cleanPath = path[:len(path) - 1]
 	}
 	dirs := DecomposePath(cleanPath)
 	if len(dirs) == 0 {
-		return fmt.Errorf("empty path to navigate")
+		return nil, fmt.Errorf("empty path to navigate")
 	}
 	lastDir := dirs[len(dirs) - 1]
 	if lastDir == "." || lastDir == ".." {
-		return fmt.Errorf("cannot create . or ..")
+		return nil, fmt.Errorf("cannot create . or ..")
 	}
 	dirs = dirs[:len(dirs) - 1]
 	var curr Catalog = cat
@@ -353,27 +344,27 @@ func NavigateCreateLast(cat Catalog, path string) error {
 			// Do nothing!
 		} else if dir == ".." {
 			if curr.Parent() == nil {
-				return fmt.Errorf("root has no parent")
+				return nil, fmt.Errorf("root has no parent")
 			}
 			curr = curr.Parent()
 		} else {
-			newCurr, found := curr.Content()[dir]
+			newCurr, found := curr.GetContent(dir)
 			if !found {
-				return fmt.Errorf("cannot find folder: %s", dir)
+				return nil, fmt.Errorf("cannot find folder: %s", dir)
 			}
 			if !newCurr.IsDir() {
-				return fmt.Errorf("not a folder: %s", newCurr.Name())
+				return nil, fmt.Errorf("not a folder: %s", newCurr.Name())
 			}
 			curr = newCurr
 		}
 	}
 	// It better not exist.
-	if _, found := curr.Content()[lastDir]; found {
-		return fmt.Errorf("folder already exists: %s", lastDir)
+	if _, found := curr.GetContent(lastDir); found {
+		return nil, fmt.Errorf("folder already exists: %s", lastDir)
 	}
-	dirObj := &Directory{lastDir, curr.Path() + lastDir + "/", make(map[string]Catalog), curr}
+	dirObj := &Directory{lastDir, curr.LocalPath() + lastDir + "/", make(map[string]Catalog), curr}
 	curr.SetContent(lastDir, dirObj)
-	return nil
+	return dirObj, nil
 }	
 
 
@@ -392,7 +383,7 @@ func NavigateFile(cat Catalog, path string) (Catalog, error) {
 			}
 			curr = curr.Parent()
 		} else {
-			newCurr, found := curr.Content()[dir]
+			newCurr, found := curr.GetContent(dir)
 			if !found {
 				return nil, fmt.Errorf("cannot find folder: %s", dir)
 			}
@@ -402,7 +393,7 @@ func NavigateFile(cat Catalog, path string) (Catalog, error) {
 			curr = newCurr
 		}
 	}
-	fileObj, found := curr.Content()[file]
+	fileObj, found := curr.GetContent(file)
 	if !found {
 		return nil, fmt.Errorf("cannot find file: %s", file)
 	}
@@ -413,13 +404,13 @@ func NavigateFile(cat Catalog, path string) (Catalog, error) {
 }
 
 func AddFile(cat Catalog, name string, uuid string) error {
-	_, found := cat.Content()[name]
+	_, found := cat.GetContent(name)
 	if found {
-		return fmt.Errorf("file %s already exists at %s", name, cat.Path())
+		return fmt.Errorf("file %s already exists at %s", name, cat.FullPath())
 	}
-	path := cat.Path() + name
+	path := cat.LocalPath() + name
 	file := &File{name, path, uuid, cat}
-	cat.Content()[name] = file
+	cat.SetContent(name, file)
 	return nil
 }
 
@@ -436,7 +427,8 @@ func flatten(cat Catalog, prefix string) []string {
 			line := fmt.Sprintf("%s", prefix)
 			result = append(result, line)
 		}
-		for k, v := range cat.Content() {
+		for _, k := range cat.ContentList() {
+			v, _ := cat.GetContent(k)
 			newPrefix := fmt.Sprintf("%s/%s", prefix, k)
 			newLines := flatten(v, newPrefix)
 			for _, line := range newLines {

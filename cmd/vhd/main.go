@@ -13,8 +13,8 @@ import (
 
 type context struct{
 	commands map[string]command
-	drives map[string]catalog.Drive
-	drive catalog.Drive
+	root catalog.Root
+	//drive catalog.Drive
 	pwd catalog.Catalog
 	exit bool         // Set to true to exit the main loop.
 }
@@ -26,40 +26,30 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	commands := initializeCommands()
-	drives, err := catalog.ReadDrives()
+	root, err := catalog.NewRoot()
 	if err != nil {
 		panic(err)
 	}
-	///drives, default_drive := initializeDrives()
-	///default_catalog, err := fetchCatalog(default_drive)
-	///if err != nil {
-	///		panic(err)
-	///}
 
 	fmt.Println("------------------------------------------------------------")
 	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
 	fmt.Println("------------------------------------------------------------")
-	fmt.Print("Drives: ")
-	for k, _ := range drives {
-		fmt.Printf("%s ", k)
-	}
-	fmt.Println()
 
 	ctxt := context{
 		commands,
-		drives,
-		nil,
-		nil,
+		root,
+		root.AsCatalog(),
 		false,
 	}
 	
 	for !ctxt.exit {
 		// Keep going until we nullify the context (flag for quitting)
-		if ctxt.drive == nil {
-			fmt.Printf("\n(no drive) ")
-		} else {
-			fmt.Printf("\n%s:%s ", ctxt.drive.Name(), ctxt.pwd.Path())
-		}
+		// if ctxt.drive == nil {
+		// 	fmt.Printf("\n(no drive) ")
+		// } else {
+		// 	fmt.Printf("\n%s:%s ", ctxt.drive.Name(), ctxt.pwd.Path())
+		// }
+		fmt.Printf("\n%s ", ctxt.pwd.FullPath())
 		line, _ := reader.ReadString('\n')
 		fields := split(line) // strings.Fields(line)
 		if len(fields) == 0 {
@@ -78,10 +68,6 @@ func main() {
 		}
 		if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
 			fmt.Printf("Too many arguments (expected %d): %s\n", commObj.maxArgCount, comm)
-			continue
-		}
-		if ctxt.drive == nil && commObj.requireDrive {
-			fmt.Printf("Command requires drive selection: %s\n", comm)
 			continue
 		}
 		err := commObj.process(args, &ctxt)
