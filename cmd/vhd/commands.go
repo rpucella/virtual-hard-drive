@@ -4,9 +4,11 @@ package main
 import (
 	"fmt"
 	"sort"
-	"rpucella.net/virtual-hard-drive/internal/catalog"
 	"github.com/google/uuid"
 	"path/filepath"
+	"time"
+
+	"rpucella.net/virtual-hard-drive/internal/virtualfs"
 )
 
 type command struct{
@@ -63,49 +65,10 @@ func commandQuit(args []string, ctxt *context) error {
 	return nil
 }
 
-/*
-func commandDrive(args []string, ctxt *context) error {
-	if len(args) == 0 {
-		// List available drives.
-		keys := make([]string, 0, len(ctxt.root.Drives()))
-		for k := range ctxt.root.Drives() {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		width := maxLength(keys)
-		for _, k := range keys {
-			fmt.Printf("%*s   %s\n", -width, k, ctxt.root.Drives()[k].Storage().Name())
-			if ctxt.root.Drives()[k].Description() != "" {
-				fmt.Printf("%*s   %s\n", -width, "", ctxt.root.Drives()[k].Description())
-			}
-		}
-		return nil
-	}
-	newName := args[0]
-	newDrive, found := ctxt.root.Drives()[newName]
-	if !found {
-		return fmt.Errorf("cannot find drive: %s", newName)
-	}
-	fmt.Printf("Loading catalog for %s\n", newDrive.Storage().Name())
-	cat := newDrive.AsCatalog()
-	// Force the fetch.
-	
-	if result := cat.Content(); result == nil {
-		return fmt.Errorf("cannot switch to drive %s", newName)
-	}
-	if newDrive.Description() != "" {
-		fmt.Println(newDrive.Description())
-	}
-	ctxt.drive = newDrive
-	ctxt.pwd = cat	
-	return nil
-}
-*/
-
 func commandLs(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		newCurr, err := catalog.Navigate(curr, args[0])
+		newCurr, err := virtualfs.Navigate(curr, args[0])
 		if err != nil {
 			return fmt.Errorf("ls: %w", err)
 		}
@@ -129,7 +92,9 @@ func commandLs(args []string, ctxt *context) error {
 	width := maxLength(files)
 	for _, name := range files {
 		file, _ := curr.GetContent(name)
-		fmt.Printf("%*s     %s\n", -width, name, file.UUID())
+		if file := file.AsFile(); file != nil { 
+			fmt.Printf("%*s     %-40s  %s\n", -width, name, file.UUID(), file.Updated().Format(time.RFC822))
+		}
 	}
 	return nil
 }
@@ -139,7 +104,7 @@ func commandCd(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	newPwd, err := catalog.Navigate(ctxt.pwd, path)
+	newPwd, err := virtualfs.Navigate(ctxt.pwd, path)
 	if err != nil {
 		return fmt.Errorf("cd: %w", err)
 	}
@@ -150,18 +115,18 @@ func commandCd(args []string, ctxt *context) error {
 func commandCatalog(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		newCurr, err := catalog.Navigate(curr, args[0])
+		newCurr, err := virtualfs.Navigate(curr, args[0])
 		if err != nil {
 			return fmt.Errorf("catalog: %w", err)
 		}
 		curr = newCurr
 	}
-	catalog.Print(curr)
+	virtualfs.Print(curr)
 	return nil
 }
 
 func commandInfo(args []string, ctxt *context) error {
-	fileObj, err := catalog.NavigateFile(ctxt.pwd, args[0])
+	fileObj, err := virtualfs.NavigateFile(ctxt.pwd, args[0])
 	if err != nil {
 		return fmt.Errorf("info: %w", err)
 	}
@@ -170,11 +135,15 @@ func commandInfo(args []string, ctxt *context) error {
 }
 
 func commandGet(args []string, ctxt *context) error {
-	fileObj, err := catalog.NavigateFile(ctxt.pwd, args[0])
+	fileObj, err := virtualfs.NavigateFile(ctxt.pwd, args[0])
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	objectName, err := fileObj.Drive().Storage().UUIDToPath(fileObj.UUID())
+	file := fileObj.AsFile()
+	if file == nil {
+		return fmt.Errorf("file %s is not a file", fileObj.Name())
+	}
+	objectName, err := fileObj.Drive().Storage().UUIDToPath(file.UUID())
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
@@ -191,7 +160,7 @@ func commandPut(args []string, ctxt *context) error {
 	srcFileName := filepath.Base(srcFilePath)
 	destFolder := ctxt.pwd
 	if len(args) == 2 {
-		newDestFolder, err := catalog.Navigate(ctxt.pwd, args[1])
+		newDestFolder, err := virtualfs.Navigate(ctxt.pwd, args[1])
 		if err != nil {
 			return fmt.Errorf("put: %w", err)
 		}
@@ -218,8 +187,8 @@ func commandPut(args []string, ctxt *context) error {
 	}
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
-	catalog.AddFile(destFolder, srcFileName, newUUID)
-	if err := drive.UpdateCatalog(); err != nil {
+	virtualfs.AddFile(destFolder, srcFileName, newUUID)
+	if err := drive.Update(); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)
 	}
@@ -231,7 +200,7 @@ func commandMkdir(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	newFolder, err := catalog.NavigateCreateLast(ctxt.pwd, path)
+	newFolder, err := virtualfs.NavigateCreateLast(ctxt.pwd, path)
 	if err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
@@ -239,7 +208,7 @@ func commandMkdir(args []string, ctxt *context) error {
 	if drive == nil {
 		return fmt.Errorf("no drive for creating folder")
 	}
-	if err := drive.UpdateCatalog(); err != nil {
+	if err := drive.Update(); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)
 	}

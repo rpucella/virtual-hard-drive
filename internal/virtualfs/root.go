@@ -1,5 +1,5 @@
 
-package catalog
+package virtualfs
 
 import (
 	"fmt"
@@ -13,12 +13,16 @@ func (r *root) Drives() map[string]Drive {
 	return r.drives
 }
 
-func (r *root) AsCatalog() Catalog {
+func (r *root) AsVirtualFS() VirtualFS {
 	return r
 }
 
 func (r *root) IsFile() bool {
 	return false
+}
+
+func (r *root) AsFile() File {
+	return nil
 }
 
 func (r *root) IsDir() bool {
@@ -37,11 +41,11 @@ func (r *root) FullPath() string {
 	return "/"
 }
 
-func (r *root) Parent() Catalog {
+func (r *root) Parent() VirtualFS {
 	return nil
 }
 
-func (r *root) Root() Catalog {
+func (r *root) Root() VirtualFS {
 	return r
 }
 
@@ -57,10 +61,6 @@ func (r *root) Print() {
 	fmt.Println("<Root>")
 }
 
-func (r *root) UUID() string {
-	return ""
-}
-
 func (r *root) ContentList() []string {
 	result := make([]string, 0, len(r.drives))
 	for k, _ := range r.drives {
@@ -69,15 +69,15 @@ func (r *root) ContentList() []string {
 	return result
 }
 
-func (r *root) GetContent(field string) (Catalog, bool) {
+func (r *root) GetContent(field string) (VirtualFS, bool) {
 	result, found := r.drives[field]
 	if !found {
 		return nil, false
 	}
-	return result.AsCatalog(), true
+	return result.AsVirtualFS(), true
 }
 
-func (r *root) SetContent(name string, value Catalog) {
+func (r *root) SetContent(name string, value VirtualFS) {
 	// Do nothing silently?
 	return
 }

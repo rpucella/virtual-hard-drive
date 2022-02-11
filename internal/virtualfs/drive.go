@@ -1,5 +1,5 @@
 
-package catalog
+package virtualfs
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"time"
+	"strconv"
 	
         "gopkg.in/yaml.v3"
 	
@@ -28,8 +30,8 @@ type drive struct{
 	description string
 	catalogPath string    // This could be kept private.
 	storage storage.Storage
-	top Catalog          // This is a horrible name.
-	root Catalog
+	top VirtualFS          // This is a horrible name.
+	root VirtualFS
 	// Add possible restriction flags (i.e., warn in case of too recent deletes, etc)
 }
 
@@ -45,7 +47,7 @@ func (d *drive) Storage() storage.Storage {
 	return d.storage
 }
 
-func (d *drive) AsCatalog() Catalog {
+func (d *drive) AsVirtualFS() VirtualFS {
 	return d
 }
 
@@ -55,6 +57,10 @@ func (d *drive) AsDrive() Drive {
 
 func (r *drive) IsFile() bool {
 	return false
+}
+
+func (r *drive) AsFile() File {
+	return nil
 }
 
 func (r *drive) IsDir() bool {
@@ -69,11 +75,11 @@ func (r *drive) FullPath() string {
 	return fmt.Sprintf("/%s/", r.name)
 }
 
-func (r *drive) Parent() Catalog {
+func (r *drive) Parent() VirtualFS {
 	return r.root
 }
 
-func (r *drive) Root() Catalog {
+func (r *drive) Root() VirtualFS {
 	return r.root
 }
 
@@ -85,10 +91,6 @@ func (r *drive) Print() {
 	fmt.Printf("<Drive %s>\n", r.name)
 }
 
-func (r *drive) UUID() string {
-	return ""
-}
-
 func (r *drive) ContentList() []string {
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
@@ -98,7 +100,7 @@ func (r *drive) ContentList() []string {
 	return r.top.ContentList()
 }
 
-func (r *drive) GetContent(field string) (Catalog, bool) {
+func (r *drive) GetContent(field string) (VirtualFS, bool) {
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
 			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
@@ -108,7 +110,7 @@ func (r *drive) GetContent(field string) (Catalog, bool) {
 	return result, found
 }
 
-func (r *drive) SetContent(name string, value Catalog) {
+func (r *drive) SetContent(name string, value VirtualFS) {
 	// Do nothing silently?
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
@@ -116,7 +118,7 @@ func (r *drive) SetContent(name string, value Catalog) {
 		}
 	}
 	r.top.SetContent(name, value)
-	// Call to UpdateCatalog?
+	// Call to UpdateVirtualFS?
 }
 
 // Store catalogs locally.
@@ -131,13 +133,13 @@ func fetchCatalog(dr *drive) error {
 	///fmt.Printf("Flat: [%s]\n", strFlat)
 	lines := strings.Split(strFlat, "\n")
 	root := dr.root
-	dr.top = &Directory{"", "/", make(map[string]Catalog), root}
+	dr.top = &vfs_dir{"", "/", make(map[string]VirtualFS), root}
 	cat := dr
 	for _, rawLine := range lines {
 		line := strings.TrimSpace(rawLine)
 		if len(line) > 0 {
 			// Skip empty lines.
-			path, uuid, err := splitLine(line)
+			path, uuid, updated, created, err := splitLine(line)
 			if err != nil {
 				return fmt.Errorf("cannot parse catalog: %w", err)
 			}
@@ -165,7 +167,9 @@ func fetchCatalog(dr *drive) error {
 				if exists {
 					return fmt.Errorf("file %s already exists in path %s", file, path)
 				}
-				fileObj := &File{file, currPath + file, uuid, curr}
+				upTime := time.Unix(updated, 0)
+				crTime := time.Unix(created, 0)
+				fileObj := &vfs_file{file, currPath + file, uuid, curr, crTime, upTime}
 				curr.SetContent(file, fileObj)
 			}
 		}
@@ -173,7 +177,7 @@ func fetchCatalog(dr *drive) error {
 	return nil
 }
 
-func (dr *drive) UpdateCatalog() error {
+func (dr *drive) Update() error {
 	flatCat := Flatten(dr.top)
 	catFile := []byte(strings.Join(flatCat, "\n") + "\n")
 	// Have we created a .tmp backup backup?
@@ -258,10 +262,82 @@ func readDrives(root Root) (map[string]Drive, error) {
 						continue
 					}
 					catalogPath := path.Join(configFolder, f.Name(), CONFIG_CATALOG)
-					drives[f.Name()] = &drive{f.Name(), config.Description, catalogPath, store, nil, root.AsCatalog()}
+					drives[f.Name()] = &drive{f.Name(), config.Description, catalogPath, store, nil, root.AsVirtualFS()}
 				}
 			}
 		}
 	}
 	return drives, nil
+}
+
+func splitLine(line string) (string, string, int64, int64, error) {
+	ss := strings.Split(line, ":")
+	if len(ss) < 1 {
+		// Allow for at least two fields - path and file UUID.
+		// Other fields (date, etc) may be optional, with defaults.
+		return "", "", 0, 0, fmt.Errorf("wrong number of fields in line %d", len(ss))
+	}
+	uuid := ""
+	updated := int64(0)
+	created := int64(0)
+	if len(ss) > 1 {
+		uuid = ss[1]
+	}
+	if len(ss) > 2 {
+		newUpdated, err := strconv.ParseInt(ss[2], 10, 64)
+		// In case of error, default to 0.
+		if err == nil {
+			updated = newUpdated
+		}
+	}
+	if len(ss) > 3 {
+		newCreated, err := strconv.ParseInt(ss[3], 10, 64)
+		// In case of error, default to 0.
+		if err == nil {
+			created = newCreated
+		}
+	}
+	return ss[0], uuid, updated, created, nil
+}
+
+func splitPathFile(path string) ([]string, string, error) {
+	ss := strings.Split(path, "/")
+	if len(ss) < 1 {
+		return nil, "", fmt.Errorf("malformed path %s", path)
+	}
+	return ss[:len(ss) - 1], ss[len(ss) - 1], nil
+}
+
+func splitPath(path string) ([]string, error) {
+	return strings.Split(path, "/"), nil
+}
+
+
+func flatten(cat VirtualFS, prefix string) []string {
+	result := make([]string, 0)     // cat.Size()
+	if cat == nil { 
+		return result
+	}
+	if file := cat.AsFile(); file != nil {
+		line := fmt.Sprintf("%s:%s:%d:%d", prefix, file.UUID(), file.Updated().Unix(), file.Created().Unix())
+		result = append(result, line)
+	} else {
+		if prefix != "" {
+			line := fmt.Sprintf("%s", prefix)
+			result = append(result, line)
+		}
+		for _, k := range cat.ContentList() {
+			v, _ := cat.GetContent(k)
+			newPrefix := fmt.Sprintf("%s/%s", prefix, k)
+			newLines := flatten(v, newPrefix)
+			for _, line := range newLines {
+				result = append(result, line)
+			}
+		}
+	}
+	return result
+}
+
+func Flatten(cat VirtualFS) []string {
+	return flatten(cat, "")
 }

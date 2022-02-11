@@ -8,14 +8,14 @@ import (
 	"bufio"
 	"unicode"
 	
-	"rpucella.net/virtual-hard-drive/internal/catalog"
+	"rpucella.net/virtual-hard-drive/internal/virtualfs"
 )
 
 type context struct{
 	commands map[string]command
-	root catalog.Root
+	root virtualfs.Root
 	//drive catalog.Drive
-	pwd catalog.Catalog
+	pwd virtualfs.VirtualFS
 	exit bool         // Set to true to exit the main loop.
 }
 
@@ -26,7 +26,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	commands := initializeCommands()
-	root, err := catalog.NewRoot()
+	root, err := virtualfs.NewRoot()
 	if err != nil {
 		panic(err)
 	}
@@ -38,7 +38,7 @@ func main() {
 	ctxt := context{
 		commands,
 		root,
-		root.AsCatalog(),
+		root.AsVirtualFS(),
 		false,
 	}
 	
