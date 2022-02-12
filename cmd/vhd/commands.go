@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 
+	"rpucella.net/virtual-hard-drive/internal/util"
 	"rpucella.net/virtual-hard-drive/internal/virtualfs"
 )
 
@@ -226,7 +227,7 @@ func commandHash(args []string, ctxt *context) error {
 	defer src.Close()
 
 	// ioutil.Discard is basically /dev/null
-	crcw := NewCRCwriter(ioutil.Discard)
+	crcw := util.NewCRCwriter(ioutil.Discard)
 	if _, err := io.Copy(crcw, src); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}

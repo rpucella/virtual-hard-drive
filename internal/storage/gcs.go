@@ -11,6 +11,8 @@ import (
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
+
+	"rpucella.net/virtual-hard-drive/internal/util"
 )
 
 // Examples mostly culled from
@@ -160,6 +162,7 @@ func (s GoogleCloud) WriteFile(content []byte, target string) error {
 func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
 	bucket := s.bucket
 	ctx := context.Background()
+	log("Connecting to ", bucket)
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
@@ -174,12 +177,14 @@ func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
 		return fmt.Errorf("os.Create: %v", err)
 	}
 
+	log("Reading object ", file)
 	obj := client.Bucket(bucket).Object(file)
-	_, err = obj.Attrs(ctx)
+	attrs, err := obj.Attrs(ctx)
 	if err != nil {
 		return fmt.Errorf("Object(%q).Attrs: %v", file, err)
 	}
-	
+	log("Size = ", fmt.Sprintf("%d", attrs.Size))
+	log("Starting download")
 	rc, err := obj.NewReader(ctx)
 	if err != nil {
 		return fmt.Errorf("Object(%q).NewReader: %v", file, err)
@@ -199,6 +204,7 @@ func (s GoogleCloud) DownloadFile(file string, outputFileName string) error {
 func (s GoogleCloud) UploadFile(file string, target string) error {
 	bucket := s.bucket
 	ctx := context.Background()
+	log("Connecting to ", bucket)
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
@@ -215,16 +221,30 @@ func (s GoogleCloud) UploadFile(file string, target string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
 	defer cancel()
 
-	wc := client.Bucket(bucket).Object(target).NewWriter(ctx)
+	log("Creating object ", target)
+	obj := client.Bucket(bucket).Object(target)
+	wc := obj.NewWriter(ctx)
 	defer wc.Close()
 
-	if _, err := io.Copy(wc, f); err != nil {
+	crcw := util.NewCRCwriter(wc)
+
+	log("Starting upload")
+	if _, err := io.Copy(crcw, f); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
 	// Wait a bit before closing, because... reasons?
 	time.Sleep(5 * time.Second)
 	if err := wc.Close(); err != nil {
 		return fmt.Errorf("Writer.Close: %v", err)
+	}
+	crc32c := crcw.Sum()
+	attrs, err := obj.Attrs(ctx)
+	if err != nil {
+		return fmt.Errorf("Object(%q).Attrs: %v", obj, err)
+	}
+	log("Checking CRC32C = ", fmt.Sprintf("%x", crc32c))
+	if (crc32c != attrs.CRC32C) {
+		return fmt.Errorf("crc32c of uploaded file different from %x", crc32c)
 	}
 	return nil
 }
@@ -242,7 +262,7 @@ func (s GoogleCloud) RemoteInfo(target string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
 	defer cancel()
 
-	log("Reading ", target)
+	log("Reading object ", target)
 	attrs, err := client.Bucket(bucket).Object(target).Attrs(ctx)
 	if err != nil {
 		return fmt.Errorf("ObjectHandle.Attrs: %v", err)
