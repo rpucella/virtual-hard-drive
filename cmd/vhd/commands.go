@@ -148,11 +148,10 @@ func commandRemote(args []string, ctxt *context) error {
 	if file == nil {
 		return fmt.Errorf("file %s is not a file", fileObj.Name())
 	}
-	objectName, err := fileObj.Drive().Storage().UUIDToPath(file.UUID())
+	err = fileObj.Drive().Storage().RemoteInfo(file.UUID(), file.Metadata())
 	if err != nil {
 		return fmt.Errorf("remote: %w", err)
 	}
-	err = fileObj.Drive().Storage().RemoteInfo(objectName)
 	return nil
 }
 
@@ -165,15 +164,11 @@ func commandGet(args []string, ctxt *context) error {
 	if file == nil {
 		return fmt.Errorf("file %s is not a file", fileObj.Name())
 	}
-	objectName, err := fileObj.Drive().Storage().UUIDToPath(file.UUID())
+	err = fileObj.Drive().Storage().DownloadFile(file.UUID(), file.Metadata(), fileObj.Name())
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	err = fileObj.Drive().Storage().DownloadFile(objectName, fileObj.Name())
-	if err != nil {
-		return fmt.Errorf("get: %w", err)
-	}
-	fmt.Printf("File %s downloaded to %s\n", objectName, fileObj.Name())
+	fmt.Printf("File %s downloaded to %s\n", file.UUID(), fileObj.Name())
 	return nil
 }
 
@@ -204,13 +199,13 @@ func commandPut(args []string, ctxt *context) error {
 	}
 	// Upload to storage.
 	// TODO: get metadata back and put in AddFile?
-	err = drive.Storage().UploadFile(srcFilePath, objectName)
+	metadata, err := drive.Storage().UploadFile(srcFilePath, objectName)
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
-	virtualfs.AddFile(destFolder, srcFileName, newUUID, "")
+	virtualfs.AddFile(destFolder, srcFileName, newUUID, metadata)
 	if err := drive.Update(); err != nil {
 		// TODO: revert catalog changes?
 		return fmt.Errorf("cannot update catalog: %w", err)

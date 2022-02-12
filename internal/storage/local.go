@@ -68,8 +68,8 @@ func (s LocalFileSystem) WriteFile(content []byte, target string) error {
 	return nil
 }
 
-func (s LocalFileSystem) DownloadFile(file string, outputFileName string) error {
-	path := path.Join(s.root, file)
+func (s LocalFileSystem) DownloadFile(uuid string, metadata string, outputFileName string) error {
+	path := path.Join(s.root, uuid)
 	src, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("os.Open: %v", err)
@@ -89,29 +89,29 @@ func (s LocalFileSystem) DownloadFile(file string, outputFileName string) error 
 	return nil
 }
 
-func (s LocalFileSystem) UploadFile(file string, target string) error {
+func (s LocalFileSystem) UploadFile(file string, target string) (string, error) {
 	src, err := os.Open(file)
 	if err != nil {
-		return fmt.Errorf("os.Open: %v", err)
+		return "", fmt.Errorf("os.Open: %v", err)
 	}
 	defer src.Close()
 
 	path := path.Join(s.root, target)
 	dest, err := os.Create(path)
 	if err != nil {
-		return fmt.Errorf("os.Create: %v", err)
+		return "", fmt.Errorf("os.Create: %v", err)
 	}
 	defer dest.Close()
 
 	if _, err := io.Copy(dest, src); err != nil {
-		return fmt.Errorf("io.Copy: %v", err)
+		return "", fmt.Errorf("io.Copy: %v", err)
 	}
 	
-	return nil
+	return "", nil
 }
 
-func (s LocalFileSystem) RemoteInfo(target string) error {
-	path := path.Join(s.root, target)
+func (s LocalFileSystem) RemoteInfo(uuid string, metadata string) error {
+	path := path.Join(s.root, uuid)
 	attrs, err := os.Stat(path)
 	if err != nil {
 		fmt.Errorf("os.Stat: %v", err)

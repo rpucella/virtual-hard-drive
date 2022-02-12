@@ -8,8 +8,8 @@ type Storage interface {
 	ListFiles() ([]string, error)
 	ReadFile(string) ([]byte, error)
 	WriteFile([]byte, string) error
-	DownloadFile(string, string) error
-	UploadFile(string, string) error
-	RemoteInfo(string) error
+	DownloadFile(string, string, string) error
+	UploadFile(string, string) (string, error)
+	RemoteInfo(string, string) error
 }
 
