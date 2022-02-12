@@ -106,6 +106,17 @@ func (s LocalFileSystem) UploadFile(file string, target string) error {
 	if _, err := io.Copy(dest, src); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
+	
+	return nil
+}
 
+func (s LocalFileSystem) RemoteInfo(target string) error {
+	path := path.Join(s.root, target)
+	attrs, err := os.Stat(path)
+	if err != nil {
+		fmt.Errorf("os.Stat: %v", err)
+	}
+	fmt.Printf("Name:   %s\n", attrs.Name())
+	fmt.Printf("Size:   %d\n", attrs.Size())
 	return nil
 }

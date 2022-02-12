@@ -27,6 +27,7 @@ type File interface {
 	UUID() string
 	Created() time.Time
 	Updated() time.Time
+	Metadata() string       // Storage-specific metadata (such as # of chunks),
 }
 
 type VirtualFS interface {
@@ -251,14 +252,14 @@ func NavigateFile(cat VirtualFS, path string) (VirtualFS, error) {
 	return fileObj, nil
 }
 
-func AddFile(cat VirtualFS, name string, uuid string) error {
+func AddFile(cat VirtualFS, name string, uuid string, metadata string) error {
 	_, found := cat.GetContent(name)
 	if found {
 		return fmt.Errorf("file %s already exists at %s", name, cat.FullPath())
 	}
 	path := cat.LocalPath() + name
 	now := time.Now()
-	file := &vfs_file{name, path, uuid, cat, now, now}
+	file := &vfs_file{name, path, uuid, cat, now, now, metadata}
 	cat.SetContent(name, file)
 	return nil
 }

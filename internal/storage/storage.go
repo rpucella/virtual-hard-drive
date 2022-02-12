@@ -10,5 +10,6 @@ type Storage interface {
 	WriteFile([]byte, string) error
 	DownloadFile(string, string) error
 	UploadFile(string, string) error
+	RemoteInfo(string) error
 }
 

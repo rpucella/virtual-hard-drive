@@ -88,6 +88,8 @@ func (r *drive) Drive() Drive {
 }
 
 func (r *drive) Print() {
+	// TODO: Complete.
+	fmt.Println()
 	fmt.Printf("<Drive %s>\n", r.name)
 }
 
@@ -139,7 +141,7 @@ func fetchCatalog(dr *drive) error {
 		line := strings.TrimSpace(rawLine)
 		if len(line) > 0 {
 			// Skip empty lines.
-			path, uuid, updated, created, err := splitLine(line)
+			path, uuid, updated, created, metadata, err := splitLine(line)
 			if err != nil {
 				return fmt.Errorf("cannot parse catalog: %w", err)
 			}
@@ -169,7 +171,7 @@ func fetchCatalog(dr *drive) error {
 				}
 				upTime := time.Unix(updated, 0)
 				crTime := time.Unix(created, 0)
-				fileObj := &vfs_file{file, currPath + file, uuid, curr, crTime, upTime}
+				fileObj := &vfs_file{file, currPath + file, uuid, curr, crTime, upTime, metadata}
 				curr.SetContent(file, fileObj)
 			}
 		}
@@ -270,16 +272,17 @@ func readDrives(root Root) (map[string]Drive, error) {
 	return drives, nil
 }
 
-func splitLine(line string) (string, string, int64, int64, error) {
+func splitLine(line string) (string, string, int64, int64, string, error) {
 	ss := strings.Split(line, ":")
 	if len(ss) < 1 {
 		// Allow for at least two fields - path and file UUID.
 		// Other fields (date, etc) may be optional, with defaults.
-		return "", "", 0, 0, fmt.Errorf("wrong number of fields in line %d", len(ss))
+		return "", "", 0, 0, "", fmt.Errorf("wrong number of fields in line %d", len(ss))
 	}
 	uuid := ""
 	updated := int64(0)
 	created := int64(0)
+	metadata := ""
 	if len(ss) > 1 {
 		uuid = ss[1]
 	}
@@ -297,7 +300,10 @@ func splitLine(line string) (string, string, int64, int64, error) {
 			created = newCreated
 		}
 	}
-	return ss[0], uuid, updated, created, nil
+	if len(ss) > 4 {
+		metadata = ss[4]
+	}
+	return ss[0], uuid, updated, created, metadata, nil
 }
 
 func splitPathFile(path string) ([]string, string, error) {
@@ -319,7 +325,7 @@ func flatten(cat VirtualFS, prefix string) []string {
 		return result
 	}
 	if file := cat.AsFile(); file != nil {
-		line := fmt.Sprintf("%s:%s:%d:%d", prefix, file.UUID(), file.Updated().Unix(), file.Created().Unix())
+		line := fmt.Sprintf("%s:%s:%d:%d:%s", prefix, file.UUID(), file.Updated().Unix(), file.Created().Unix(), file.Metadata())
 		result = append(result, line)
 	} else {
 		if prefix != "" {

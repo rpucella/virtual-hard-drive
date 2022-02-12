@@ -16,6 +16,10 @@ import (
 // Examples mostly culled from
 //   https://github.com/GoogleCloudPlatform/golang-samples/tree/main/storage
 
+const (
+	UPLOAD_TIMEOUT = 120
+)
+
 type GoogleCloud struct {
 	bucket string
 }
@@ -26,6 +30,14 @@ func NewGoogleCloud(bucket string) GoogleCloud {
 
 func (s GoogleCloud) Name() string {
 	return fmt.Sprintf("gcs::%s", s.bucket)
+}
+
+func log(msgs ...string) {
+	acc := ""
+	for _, msg := range msgs {
+		acc += msg
+	}
+	fmt.Printf("[%s]\n", acc)
 }
 
 // Convert a UUID to a path on Cloud Storage.
@@ -199,7 +211,8 @@ func (s GoogleCloud) UploadFile(file string, target string) error {
 	}
 	defer f.Close()
 
-	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
+	// TODO: Split the file in chunks client-side and store in pieces?
+	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
 	defer cancel()
 
 	wc := client.Bucket(bucket).Object(target).NewWriter(ctx)
@@ -208,5 +221,38 @@ func (s GoogleCloud) UploadFile(file string, target string) error {
 	if _, err := io.Copy(wc, f); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
+	// Wait a bit before closing, because... reasons?
+	time.Sleep(5 * time.Second)
+	if err := wc.Close(); err != nil {
+		return fmt.Errorf("Writer.Close: %v", err)
+	}
+	return nil
+}
+
+func (s GoogleCloud) RemoteInfo(target string) error {
+	bucket := s.bucket
+	ctx := context.Background()
+	log("Connecting to ", bucket)
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("storage.NewClient: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
+	defer cancel()
+
+	log("Reading ", target)
+	attrs, err := client.Bucket(bucket).Object(target).Attrs(ctx)
+	if err != nil {
+		return fmt.Errorf("ObjectHandle.Attrs: %v", err)
+	}
+	fmt.Println()
+	fmt.Printf("Bucket:       %s\n", attrs.Bucket)
+	fmt.Printf("Name:         %s\n", attrs.Name)
+	fmt.Printf("ContentType:  %s\n", attrs.ContentType)
+	fmt.Printf("Size:         %d\n", attrs.Size)
+	fmt.Printf("MD5:          %x\n", attrs.MD5)
+	fmt.Printf("CRC32C:       %x\n", attrs.CRC32C)
 	return nil
 }

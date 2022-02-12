@@ -66,6 +66,7 @@ func (d *vfs_dir) SetContent(field string, value VirtualFS) {
 }
 
 func (d *vfs_dir) Print() {
+	fmt.Println()
 	fmt.Printf("Name:     %s\n", d.name)
 	fmt.Printf("Path:     %s\n", d.path)
 }

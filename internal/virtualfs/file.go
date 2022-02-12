@@ -13,6 +13,7 @@ type vfs_file struct {
 	parent VirtualFS
 	created time.Time
 	updated time.Time
+	metadata string
 }
 
 func (f *vfs_file) IsFile() bool {
@@ -68,11 +69,13 @@ func (f *vfs_file) UUID() string {
 }
 
 func (f *vfs_file) Print() {
-	fmt.Printf("Name:     %s\n", f.name)
-	fmt.Printf("Path:     %s\n", f.path)
-	fmt.Printf("UUID:     %s\n", f.uuid)
-	fmt.Printf("Created   %s\n", f.created.Format(time.RFC822))
-	fmt.Printf("Updated:  %s\n", f.updated.Format(time.RFC822))
+	fmt.Println()
+	fmt.Printf("Name:      %s\n", f.name)
+	fmt.Printf("Path:      %s\n", f.path)
+	fmt.Printf("UUID:      %s\n", f.uuid)
+	fmt.Printf("Created    %s\n", f.created.Format(time.RFC822))
+	fmt.Printf("Updated:   %s\n", f.updated.Format(time.RFC822))
+	fmt.Printf("Metadata:  %s\n", f.metadata)
 }
 
 func (f *vfs_file) Root() VirtualFS {
@@ -85,4 +88,8 @@ func (f *vfs_file) Created() time.Time {
 
 func (f *vfs_file) Updated() time.Time {
 	return f.updated
+}
+
+func (f *vfs_file) Metadata() string {
+	return f.metadata
 }
