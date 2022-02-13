@@ -7,9 +7,9 @@ import (
 
 type vfs_dir struct {
 	name string
-	path string
 	content map[string]VirtualFS
 	parent VirtualFS
+	id int              // Identifier in catalog.db.
 }
 
 func (d *vfs_dir) IsFile() bool {
@@ -36,12 +36,8 @@ func (d *vfs_dir) Name() string {
 	return d.name
 }
 
-func (d *vfs_dir) LocalPath() string {
-	return d.path
-}
-
-func (d *vfs_dir) FullPath() string {
-	return fmt.Sprintf("/%s%s", d.Drive().Name(), d.path)
+func (d *vfs_dir) Path() string {
+	return constructPath(d) + "/"
 }
 
 func (d *vfs_dir) Parent() VirtualFS {
@@ -65,10 +61,19 @@ func (d *vfs_dir) SetContent(field string, value VirtualFS) {
 	d.content[field] = value
 }
 
+func (d *vfs_dir) DelContent(field string) {
+	delete(d.content, field)
+}
+
+func (d *vfs_dir) CatalogId () int {
+	return d.id
+}
+
 func (d *vfs_dir) Print() {
 	fmt.Println()
-	fmt.Printf("Name:     %s\n", d.name)
-	fmt.Printf("Path:     %s\n", d.path)
+	fmt.Printf("Name:       %s\n", d.name)
+	fmt.Printf("Path:       %s\n", d.Path())
+	fmt.Printf("Catalog ID: %d\n", d.id)
 }
 
 func (d *vfs_dir) Root() VirtualFS {

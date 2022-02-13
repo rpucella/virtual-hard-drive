@@ -49,7 +49,7 @@ func main() {
 		// } else {
 		// 	fmt.Printf("\n%s:%s ", ctxt.drive.Name(), ctxt.pwd.Path())
 		// }
-		fmt.Printf("\n%s ", ctxt.pwd.FullPath())
+		fmt.Printf("\n%s ", ctxt.pwd.Path())
 		line, _ := reader.ReadString('\n')
 		fields := split(line) // strings.Fields(line)
 		if len(fields) == 0 {

@@ -33,11 +33,7 @@ func (r *root) Name() string {
 	return ""
 }
 
-func (r *root) LocalPath() string {
-	return "/"
-}
-
-func (r *root) FullPath() string {
+func (r *root) Path() string {
 	return "/"
 }
 
@@ -78,13 +74,20 @@ func (r *root) GetContent(field string) (VirtualFS, bool) {
 }
 
 func (r *root) SetContent(name string, value VirtualFS) {
-	// Do nothing silently?
-	return
+	// Do nothing.
+}
+
+func (r *root) DelContent(name string) {
+	// Do nothing.
+}
+
+func (r *root) CatalogId () int {
+	return -1
 }
 
 func NewRoot() (Root, error) {
 	root := &root{}
-	content, err := readDrives(root)
+	content, err := fetchDrives(root)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read drives: %w", err)
 	}

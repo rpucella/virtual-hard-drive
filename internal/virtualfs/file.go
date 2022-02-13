@@ -8,12 +8,12 @@ import (
 
 type vfs_file struct {
 	name string
-	path string
 	uuid string
 	parent VirtualFS
 	created time.Time
 	updated time.Time
 	metadata string
+	id int              // Identifier in catalog.db.
 }
 
 func (f *vfs_file) IsFile() bool {
@@ -40,12 +40,8 @@ func (f *vfs_file) Name() string {
 	return f.name
 }
 
-func (f *vfs_file) LocalPath() string {
-	return f.path
-}
-
-func (f *vfs_file) FullPath() string {
-	return fmt.Sprintf("/%s%s", f.Drive().Name(), f.path)
+func (f *vfs_file) Path() string {
+	return constructPath(f)
 }
 
 func (f *vfs_file) Parent() VirtualFS {
@@ -61,21 +57,30 @@ func (f *vfs_file) GetContent(field string) (VirtualFS, bool) {
 }
 
 func (f *vfs_file) SetContent(field string, value VirtualFS) {
-	// Mmm. Do nothing.
+	// Do nothing.
+}
+
+func (f *vfs_file) DelContent(field string) {
+	// Do nothing.
 }
 
 func (f *vfs_file) UUID() string {
 	return f.uuid
 }
 
+func (f *vfs_file) CatalogId() int {
+	return f.id
+}
+
 func (f *vfs_file) Print() {
 	fmt.Println()
-	fmt.Printf("Name:      %s\n", f.name)
-	fmt.Printf("Path:      %s\n", f.path)
-	fmt.Printf("UUID:      %s\n", f.uuid)
-	fmt.Printf("Created    %s\n", f.created.Format(time.RFC822))
-	fmt.Printf("Updated:   %s\n", f.updated.Format(time.RFC822))
-	fmt.Printf("Metadata:  %s\n", f.metadata)
+	fmt.Printf("Name:       %s\n", f.name)
+	fmt.Printf("Path:       %s\n", f.Path())
+	fmt.Printf("UUID:       %s\n", f.uuid)
+	fmt.Printf("Created     %s\n", f.created.Format(time.RFC822))
+	fmt.Printf("Updated:    %s\n", f.updated.Format(time.RFC822))
+	fmt.Printf("Metadata:   %s\n", f.metadata)
+	fmt.Printf("Catalog ID: %d\n", f.id)
 }
 
 func (f *vfs_file) Root() VirtualFS {

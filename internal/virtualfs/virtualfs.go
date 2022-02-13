@@ -18,8 +18,8 @@ type Drive interface {
 	Name() string
 	Description() string
 	Storage() storage.Storage
-	Update() error       // Record changes to filesystem 
 	AsVirtualFS() VirtualFS
+	CatalogId() int
 }
 
 type File interface {
@@ -36,8 +36,7 @@ type VirtualFS interface {
 	AsDrive() Drive
 	AsFile() File
 	Name() string
-	LocalPath() string   // This is the local path of the entry.
-	FullPath() string    // Full path including drive name.    
+	Path() string        // Full path including drive name.    
 	Parent() VirtualFS
 	Root() VirtualFS
 	Drive() Drive        // Returns the drive of this node (if any).
@@ -45,39 +44,22 @@ type VirtualFS interface {
 	ContentList() []string
 	GetContent(string) (VirtualFS, bool)
 	SetContent(string, VirtualFS)
+	DelContent(string)
+	CatalogId() int      // Meaning depends on the kind of virtual FS node we have.
 }
 
-func walkCreateDirectories(cat VirtualFS, path string, directories []string) (VirtualFS, error) {
-	// We can probably merge this function with NavigateCreateLast() below
-	var curr VirtualFS
-	var currPath string
-	for i, dir := range directories {
-		if curr == nil {
-			// First directory should be empty
-			if i != 0 || dir != "" {
-				return nil, fmt.Errorf("path should be absolute %s", path)
-			}
-			curr = cat
-			currPath = "/"
-		} else if curr.IsFile() {
-			return nil, fmt.Errorf("file in middle of path %s", path)
-		} else if curr.IsDir() {
-			currPath = currPath + dir + "/"
-			// does the name exist?
-			dirObj, ok := curr.GetContent(dir)
-			if ok {
-				curr = dirObj
-			} else {
-				// Need to create the directory!
-				dirObj = &vfs_dir{dir, currPath, make(map[string]VirtualFS), curr}
-				curr.SetContent(dir, dirObj)
-				curr = dirObj
-			}
-		} else {
-			return nil, fmt.Errorf("unknown catalog object %v", curr)
-		}
+func constructPath(vfs VirtualFS) string {
+	path := make([]string, 0, 10)
+	curr := vfs
+	for curr != nil {
+		path = append(path, curr.Name())
+		curr = curr.Parent()
 	}
-	return curr, nil
+	// Reverse
+	for i, j := 0, len(path) - 1; i < j; i, j = i + 1, j - 1 {
+		path[i], path[j] = path[j], path[i]
+	}
+	return strings.Join(path, "/")
 }
 
 func spaces(n int) string {
@@ -207,12 +189,10 @@ func NavigateCreateLast(cat VirtualFS, path string) (VirtualFS, error) {
 			curr = newCurr
 		}
 	}
-	// It better not exist.
-	if _, found := curr.GetContent(lastDir); found {
-		return nil, fmt.Errorf("folder already exists: %s", lastDir)
+	dirObj, err := CreateDirectory(curr, lastDir)
+	if err != nil {
+		return nil, err
 	}
-	dirObj := &vfs_dir{lastDir, curr.LocalPath() + lastDir + "/", make(map[string]VirtualFS), curr}
-	curr.SetContent(lastDir, dirObj)
 	return dirObj, nil
 }	
 
@@ -252,14 +232,31 @@ func NavigateFile(cat VirtualFS, path string) (VirtualFS, error) {
 	return fileObj, nil
 }
 
-func AddFile(cat VirtualFS, name string, uuid string, metadata string) error {
+func CreateFile(cat VirtualFS, name string, uuid string, metadata string) (VirtualFS, error) {
 	_, found := cat.GetContent(name)
 	if found {
-		return fmt.Errorf("file %s already exists at %s", name, cat.FullPath())
+		return nil, fmt.Errorf("entry %s already exists at %s", name, cat.Path())
 	}
-	path := cat.LocalPath() + name
 	now := time.Now()
-	file := &vfs_file{name, path, uuid, cat, now, now, metadata}
-	cat.SetContent(name, file)
-	return nil
+	fileObj := &vfs_file{name, uuid, cat, now, now, metadata, -2}
+	cat.SetContent(name, fileObj)
+	if err := createCatalogFile(fileObj); err != nil {
+		cat.DelContent(name)
+		return nil, err
+	}
+	return fileObj, nil
+}
+
+func CreateDirectory(cat VirtualFS, name string) (VirtualFS, error) {
+	_, found := cat.GetContent(name)
+	if found {
+		return nil, fmt.Errorf("entry %s already exists at %s", name, cat.Path())
+	}
+	dirObj := &vfs_dir{name, make(map[string]VirtualFS), cat, -2}
+	cat.SetContent(name, dirObj)
+	if err := createCatalogDirectory(dirObj); err != nil {
+		cat.DelContent(name)
+		return nil, err
+	}
+	return dirObj, nil
 }

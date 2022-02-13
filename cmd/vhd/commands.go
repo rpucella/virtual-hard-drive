@@ -186,12 +186,12 @@ func commandPut(args []string, ctxt *context) error {
 	_, found := destFolder.GetContent(srcFileName)
 	if found {
 		// Confirm overwrite? Or force user to delete first?
-		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.FullPath())
+		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.Path())
 	}
 	newUUID := uuid.NewString()
 	drive := destFolder.Drive()
 	if drive == nil {
-		return fmt.Errorf("no drive for folder: %s", destFolder.FullPath())
+		return fmt.Errorf("no drive for folder: %s", destFolder.Path())
 	}
 	objectName, err := drive.Storage().UUIDToPath(newUUID)
 	if err != nil {
@@ -205,10 +205,8 @@ func commandPut(args []string, ctxt *context) error {
 	}
 	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
 	// Add file to catalog.
-	virtualfs.AddFile(destFolder, srcFileName, newUUID, metadata)
-	if err := drive.Update(); err != nil {
-		// TODO: revert catalog changes?
-		return fmt.Errorf("cannot update catalog: %w", err)
+	if _, err := virtualfs.CreateFile(destFolder, srcFileName, newUUID, metadata); err != nil {
+		return fmt.Errorf("put: %w", err)
 	}
 	return nil
 }
@@ -235,17 +233,8 @@ func commandMkdir(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	newFolder, err := virtualfs.NavigateCreateLast(ctxt.pwd, path)
-	if err != nil {
+	if _, err := virtualfs.NavigateCreateLast(ctxt.pwd, path); err != nil { 
 		return fmt.Errorf("mkdir: %w", err)
-	}
-	drive := newFolder.Drive()
-	if drive == nil {
-		return fmt.Errorf("no drive for creating folder")
-	}
-	if err := drive.Update(); err != nil {
-		// TODO: revert catalog changes?
-		return fmt.Errorf("cannot update catalog: %w", err)
 	}
 	return nil
 }
