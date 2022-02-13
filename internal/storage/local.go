@@ -21,17 +21,6 @@ func (s LocalFileSystem) Name() string {
 	return fmt.Sprintf("local::%s", s.root)
 }
 
-func (s LocalFileSystem) UUIDToPath(uuid string) (string, error) {
-	if len(uuid) != 36 {
-		return "", fmt.Errorf("length of UUID %s <> 36", uuid)
-	}
-	return uuid, nil
-}
-
-func (s LocalFileSystem) CatalogToPath(catalog string) (string, error) {
-	return catalog, nil
-}
-
 func (s LocalFileSystem) ListFiles() ([]string, error) {
 	result := make([]string, 0, 10)
 	accumulate := func(path string, info os.FileInfo, err error) error {

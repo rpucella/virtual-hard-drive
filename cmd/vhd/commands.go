@@ -168,7 +168,7 @@ func commandGet(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	fmt.Printf("File %s downloaded to %s\n", file.UUID(), fileObj.Name())
+	fmt.Printf("UUID %s downloaded to file %s\n", file.UUID(), fileObj.Name())
 	return nil
 }
 
@@ -193,17 +193,12 @@ func commandPut(args []string, ctxt *context) error {
 	if drive == nil {
 		return fmt.Errorf("no drive for folder: %s", destFolder.Path())
 	}
-	objectName, err := drive.Storage().UUIDToPath(newUUID)
-	if err != nil {
-		return fmt.Errorf("put: %w", err)
-	}
 	// Upload to storage.
-	// TODO: get metadata back and put in AddFile?
-	metadata, err := drive.Storage().UploadFile(srcFilePath, objectName)
+	metadata, err := drive.Storage().UploadFile(srcFilePath, newUUID)
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
-	fmt.Printf("File %s uploaded to object %s\n", srcFileName, objectName)
+	fmt.Printf("File %s uploaded to UUID %s", srcFileName, newUUID)
 	// Add file to catalog.
 	if _, err := virtualfs.CreateFile(destFolder, srcFileName, newUUID, metadata); err != nil {
 		return fmt.Errorf("put: %w", err)
@@ -220,7 +215,7 @@ func commandHash(args []string, ctxt *context) error {
 	defer src.Close()
 
 	// ioutil.Discard is basically /dev/null
-	crcw := util.NewCRCwriter(ioutil.Discard)
+	crcw := util.NewCRCWriter(ioutil.Discard)
 	if _, err := io.Copy(crcw, src); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}

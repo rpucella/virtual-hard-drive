@@ -14,28 +14,28 @@ const (
 // From
 // https://stackoverflow.com/questions/64415363/calculate-crc32-checksum-from-file-reader-with-go-and-cloud-storage
 
-func NewCRCwriter(w io.Writer) *CRCwriter {
+func NewCRCWriter(w io.Writer) *CRCWriter {
 
 	// Specific for this polynomial.
-	return &CRCwriter{
+	return &CRCWriter{
 		h: crc32.New(crc32.MakeTable(GCS_POLY)),
 		w: w,
 	}
 	
 }
 
-type CRCwriter struct {
+type CRCWriter struct {
 	h hash.Hash32
 	w io.Writer
 }
 
-func (c *CRCwriter) Write(p []byte) (n int, err error) {
+func (c *CRCWriter) Write(p []byte) (n int, err error) {
 	n, err = c.w.Write(p)  // with each write ...
 	c.h.Write(p)           // ... update the hash
 	return
 }
 
-func (c *CRCwriter) Sum() uint32 {
+func (c *CRCWriter) Sum() uint32 {
 	return c.h.Sum32() // final hash
 }
 

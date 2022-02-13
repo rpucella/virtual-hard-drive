@@ -21,8 +21,8 @@ import (
 //   https://github.com/GoogleCloudPlatform/golang-samples/tree/main/storage
 
 const (
-	UPLOAD_TIMEOUT = 120
-	CHUNK_SIZE = 52428800   // 50MB
+	UPLOAD_TIMEOUT = 600    // 10m
+	CHUNK_SIZE = 26214400   // 25MB
 	UPLOAD_PAUSE = 2
 )
 
@@ -38,29 +38,17 @@ func (s GoogleCloud) Name() string {
 	return fmt.Sprintf("gcs::%s", s.bucket)
 }
 
-func log(msgs ...string) {
-	acc := ""
-	for _, msg := range msgs {
-		acc += msg
-	}
-	fmt.Printf("[%s]\n", acc)
-}
-
 // Convert a UUID to a path on Cloud Storage.
 // E.g.,
 //   7b5d41cc-86d6-11eca8a3-0242ac120002
 // to
 //   7b/5d/41/cc/7b5d41cc-86d6-11eca8a3-0242ac120002
 
-func (s GoogleCloud) UUIDToPath(uuid string) (string, error) {
+func uuidToPath(uuid string) (string, error) {
 	if len(uuid) != 36 {
 		return "", fmt.Errorf("length of UUID %s <> 36", uuid)
 	}
 	return fmt.Sprintf("%s/%s/%s/%s/%s", uuid[:2], uuid[2:4], uuid[4:6], uuid[6:8], uuid), nil
-}
-
-func (s GoogleCloud) CatalogToPath(catalog string) (string, error) {
-	return catalog, nil
 }
 
 func (s GoogleCloud) ListFiles() ([]string, error) {
@@ -88,32 +76,6 @@ func (s GoogleCloud) ListFiles() ([]string, error) {
 		files = append(files, attrs.Name)
 	}
 	return files, nil
-}
-
-func ListBuckets(projectID string) ([]string, error) {
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("storage.NewClient: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
-	defer cancel()
-
-	var buckets []string
-	it := client.Buckets(ctx, projectID)
-	for {
-		battrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		buckets = append(buckets, battrs.Name)
-	}
-	return buckets, nil
 }
 
 func (s GoogleCloud) ReadFile(file string) ([]byte, error) {
@@ -166,16 +128,15 @@ func (s GoogleCloud) WriteFile(content []byte, target string) error {
 func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	log("Connecting to ", bucket)
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
 	
-	target, err := s.UUIDToPath(uuid)
+	target, err := uuidToPath(uuid)
 	if err != nil {
-		return fmt.Errorf("RemoteInfo: %w", err)
+		return err
 	}
 	
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
@@ -185,6 +146,7 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 	if err != nil {
 		return fmt.Errorf("os.Create: %v", err)
 	}
+	negf := util.NewNegateWriter(f)
 
 	if metadata != "" {
 		// We have chunks.
@@ -194,7 +156,7 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 		}
 		for i := int64(0); i < numParts; i++ {
 			currTarget := fmt.Sprintf("%s.%03d", target, i)
-			log("Starting download ", currTarget)
+			fmt.Printf("Downloading object %s\n", currTarget)
 			obj := client.Bucket(bucket).Object(currTarget)
 			rc, err := obj.NewReader(ctx)
 			if err != nil {
@@ -202,7 +164,7 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 			}
 			defer rc.Close()
 			
-			if _, err := io.Copy(f, rc); err != nil {
+			if _, err := io.Copy(negf, rc); err != nil {
 				return fmt.Errorf("io.Copy: %w", err)
 			}
 		
@@ -211,21 +173,15 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 			}
 		}
 	} else {
-		log("Reading object ", target)
+		fmt.Printf("Downloading object %s", target)
 		obj := client.Bucket(bucket).Object(target)
-		attrs, err := obj.Attrs(ctx)
-		if err != nil {
-			return fmt.Errorf("Object(%q).Attrs: %v", target, err)
-		}
-		log("Size = ", fmt.Sprintf("%d", attrs.Size))
-		log("Starting download")
 		rc, err := obj.NewReader(ctx)
 		if err != nil {
 			return fmt.Errorf("Object(%q).NewReader: %v", target, err)
 		}
 		defer rc.Close()
 		
-		if _, err := io.Copy(f, rc); err != nil {
+		if _, err := io.Copy(negf, rc); err != nil {
 			return fmt.Errorf("io.Copy: %v", err)
 		}
 	}
@@ -237,15 +193,19 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 	return nil
 }
 
-func (s GoogleCloud) UploadFile(path string, target string) (string, error) {
+func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	bucket := s.bucket
 	ctx := context.Background()
-	log("Connecting to ", bucket)
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return "", fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
+
+	target, err := uuidToPath(uuid)
+	if err != nil {
+		return "", err
+	}
 
 	// Get source file size.
 	attrs, err := os.Stat(path)
@@ -255,7 +215,7 @@ func (s GoogleCloud) UploadFile(path string, target string) (string, error) {
 	fileSize := attrs.Size()
 	// Calculate total number of parts the file will be chunked into.
 	totalPartsNum := int(math.Ceil(float64(fileSize) / float64(CHUNK_SIZE)))
-	log("Calculating ", fmt.Sprintf("%d", totalPartsNum), " parts")
+	fmt.Printf("Splitting into %d objects\n", totalPartsNum)
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -271,12 +231,13 @@ func (s GoogleCloud) UploadFile(path string, target string) (string, error) {
 	// https://socketloop.com/tutorials/golang-how-to-split-or-chunking-a-file-to-smaller-pieces
 	for i := 0; i < totalPartsNum; i++ {
 		currTarget := fmt.Sprintf("%s.%03d", target, i)
-		log("Creating object ", currTarget)
+		fmt.Printf("Uploading to object %s\n", currTarget)
 		obj := client.Bucket(bucket).Object(currTarget)
 		wc := obj.NewWriter(ctx)
 		defer wc.Close()
-		crcw := util.NewCRCwriter(wc)
-		log("Starting upload")
+		// Order is important: first we flip bytes, then we compute the CRC.
+		negw := util.NewNegateWriter(wc)
+		crcw := util.NewCRCWriter(negw)
 		
 		partSize := int(math.Min(CHUNK_SIZE, float64(fileSize - int64(i * CHUNK_SIZE))))
 		partBuffer := make([]byte, partSize)
@@ -300,7 +261,6 @@ func (s GoogleCloud) UploadFile(path string, target string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("Object(%q).Attrs: %v", obj, err)
 		}
-		log("Checking CRC32C = ", fmt.Sprintf("%x", crc32c))
 		if (crc32c != attrs.CRC32C) {
 			return "", fmt.Errorf("crc32c of uploaded file different from %x", crc32c)
 		}
@@ -312,7 +272,6 @@ func (s GoogleCloud) UploadFile(path string, target string) (string, error) {
 func (s GoogleCloud) uploadFileSingle(path string, target string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	log("Connecting to ", bucket)
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
@@ -329,14 +288,14 @@ func (s GoogleCloud) uploadFileSingle(path string, target string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
 	defer cancel()
 
-	log("Creating object ", target)
+	fmt.Printf("Uploading to object %s\n", target)
 	obj := client.Bucket(bucket).Object(target)
 	wc := obj.NewWriter(ctx)
 	defer wc.Close()
 
-	crcw := util.NewCRCwriter(wc)
+	negw := util.NewNegateWriter(wc)
+	crcw := util.NewCRCWriter(negw)
 
-	log("Starting upload")
 	if _, err := io.Copy(crcw, f); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
@@ -350,7 +309,6 @@ func (s GoogleCloud) uploadFileSingle(path string, target string) error {
 	if err != nil {
 		return fmt.Errorf("Object(%q).Attrs: %v", obj, err)
 	}
-	log("Checking CRC32C = ", fmt.Sprintf("%x", crc32c))
 	if (crc32c != attrs.CRC32C) {
 		return fmt.Errorf("crc32c of uploaded file different from %x", crc32c)
 	}
@@ -360,16 +318,15 @@ func (s GoogleCloud) uploadFileSingle(path string, target string) error {
 func (s GoogleCloud) RemoteInfo(uuid string, metadata string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	log("Connecting to ", bucket)
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
  	defer client.Close()
 
-	target, err := s.UUIDToPath(uuid)
+	target, err := uuidToPath(uuid)
 	if err != nil {
-		return fmt.Errorf("RemoteInfo: %w", err)
+		return err
 	}
 	
 	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
