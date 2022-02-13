@@ -70,7 +70,6 @@ func (d *vfs_dir) CatalogId () int {
 }
 
 func (d *vfs_dir) Print() {
-	fmt.Println()
 	fmt.Printf("Name:       %s\n", d.name)
 	fmt.Printf("Path:       %s\n", d.Path())
 	fmt.Printf("Catalog ID: %d\n", d.id)

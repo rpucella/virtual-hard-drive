@@ -31,9 +31,12 @@ func main() {
 		panic(err)
 	}
 
+	/*
 	fmt.Println("------------------------------------------------------------")
 	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
 	fmt.Println("------------------------------------------------------------")
+        */
+	fmt.Println("VIRTUAL HARD DRIVE\n")
 
 	ctxt := context{
 		commands,
@@ -49,8 +52,9 @@ func main() {
 		// } else {
 		// 	fmt.Printf("\n%s:%s ", ctxt.drive.Name(), ctxt.pwd.Path())
 		// }
-		fmt.Printf("\n%s ", ctxt.pwd.Path())
+		fmt.Printf("%s ", ctxt.pwd.Path())
 		line, _ := reader.ReadString('\n')
+		fmt.Println()
 		fields := split(line) // strings.Fields(line)
 		if len(fields) == 0 {
 			continue
@@ -59,20 +63,20 @@ func main() {
 		args := fields[1:]
 		commObj, ok := commands[comm]
 		if !ok {
-			fmt.Printf("Unknown command: %s\n", comm)
+			fmt.Printf("Unknown command: %s\n\n", comm)
 			continue
 		}
 		if len(args) < commObj.minArgCount {
-			fmt.Printf("Too few arguments (expected %d): %s\n", commObj.minArgCount, comm)
+			fmt.Printf("Too few arguments (expected %d): %s\n\n", commObj.minArgCount, comm)
 			continue
 		}
 		if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
-			fmt.Printf("Too many arguments (expected %d): %s\n", commObj.maxArgCount, comm)
+			fmt.Printf("Too many arguments (expected %d): %s\n\n", commObj.maxArgCount, comm)
 			continue
 		}
 		err := commObj.process(args, &ctxt)
 		if err != nil {
-			fmt.Printf("Error: %s\n", err)
+			fmt.Printf("Error: %s\n\n", err)
 			continue
 		}
 	}

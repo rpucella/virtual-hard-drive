@@ -72,7 +72,6 @@ func (r *drive) CatalogId() int {
 
 func (r *drive) Print() {
 	// TODO: Complete.
-	fmt.Println()
 	fmt.Printf("<Drive %s>\n", r.name)
 }
 

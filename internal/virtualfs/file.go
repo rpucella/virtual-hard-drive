@@ -73,7 +73,6 @@ func (f *vfs_file) CatalogId() int {
 }
 
 func (f *vfs_file) Print() {
-	fmt.Println()
 	fmt.Printf("Name:       %s\n", f.name)
 	fmt.Printf("Path:       %s\n", f.Path())
 	fmt.Printf("UUID:       %s\n", f.uuid)

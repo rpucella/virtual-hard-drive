@@ -61,6 +61,7 @@ func commandHelp(args []string, ctxt *context) error {
 	for _, k := range keys {
 		fmt.Printf("%*s   %s\n", -width, ctxt.commands[k].usage, ctxt.commands[k].help)
 	}
+	fmt.Println()
 	return nil
 }
 
@@ -99,6 +100,9 @@ func commandLs(args []string, ctxt *context) error {
 		if file := file.AsFile(); file != nil { 
 			fmt.Printf("%*s     %-40s  %s\n", -width, name, file.UUID(), file.Updated().Format(time.RFC822))
 		}
+	}
+	if len(dirs) > 0 || len(files) > 0 {
+		fmt.Println()
 	}
 	return nil
 }
@@ -143,6 +147,7 @@ func commandInfo(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("remote: %w", err)
 	}
+	fmt.Println()
 	return nil
 }
 
@@ -159,7 +164,7 @@ func commandGet(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	fmt.Printf("UUID %s downloaded to file %s\n", file.UUID(), fileObj.Name())
+	fmt.Printf("UUID %s downloaded to file %s\n\n", file.UUID(), fileObj.Name())
 	return nil
 }
 
@@ -189,7 +194,7 @@ func commandPut(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
-	fmt.Printf("File %s uploaded to UUID %s\n", srcFileName, newUUID)
+	fmt.Printf("File %s uploaded to UUID %s\n\n", srcFileName, newUUID)
 	// Add file to catalog.
 	if _, err := virtualfs.CreateFile(destFolder, srcFileName, newUUID, metadata); err != nil {
 		return fmt.Errorf("put: %w", err)
@@ -210,7 +215,7 @@ func commandHash(args []string, ctxt *context) error {
 	if _, err := io.Copy(crcw, src); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
-	fmt.Printf("CRC32C:  %x\n", crcw.Sum())
+	fmt.Printf("CRC32C:  %x\n\n", crcw.Sum())
 	return nil
 }
 

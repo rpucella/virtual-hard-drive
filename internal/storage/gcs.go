@@ -22,7 +22,7 @@ import (
 
 const (
 	UPLOAD_TIMEOUT = 600    // 10m
-	CHUNK_SIZE = 26214400   // 25MB
+	CHUNK_SIZE = 52428800   // 50MB
 	UPLOAD_PAUSE = 2
 )
 
@@ -154,6 +154,7 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 		if err != nil {
 			return fmt.Errorf("wrong metadata: %s", metadata)
 		}
+		fmt.Printf("File split into %d objects\n", numParts)
 		for i := int64(0); i < numParts; i++ {
 			currTarget := fmt.Sprintf("%s.%03d", target, i)
 			fmt.Printf("Downloading object %s\n", currTarget)
