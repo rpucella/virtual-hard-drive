@@ -105,6 +105,7 @@ func (s LocalFileSystem) RemoteInfo(uuid string, metadata string) error {
 	if err != nil {
 		fmt.Errorf("os.Stat: %v", err)
 	}
+	fmt.Println()
 	fmt.Printf("Name:   %s\n", attrs.Name())
 	fmt.Printf("Size:   %d\n", attrs.Size())
 	return nil

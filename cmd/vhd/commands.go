@@ -41,7 +41,6 @@ func initializeCommands() map[string]command {
 	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
 	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
 	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information"}
-	commands["remote"] = command{1, 1, commandRemote, "remote <file>", "Show remote file information"}
 	commands["get"] = command{1, 1, commandGet, "get <file>", "Download file to disk"}
 	commands["put"] = command{1, 2, commandPut, "put <local-file> [<folder>]", "Upload local file to drive folder"}
 	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
@@ -136,14 +135,6 @@ func commandInfo(args []string, ctxt *context) error {
 		return fmt.Errorf("info: %w", err)
 	}
 	fileObj.Print()
-	return nil
-}
-
-func commandRemote(args []string, ctxt *context) error {
-	fileObj, err := virtualfs.NavigateFile(ctxt.pwd, args[0])
-	if err != nil {
-		return fmt.Errorf("remote: %w", err)
-	}
 	file := fileObj.AsFile()
 	if file == nil {
 		return fmt.Errorf("file %s is not a file", fileObj.Name())
