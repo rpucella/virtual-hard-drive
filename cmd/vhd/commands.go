@@ -72,7 +72,7 @@ func commandQuit(args []string, ctxt *context) error {
 func commandLs(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		newCurr, err := virtualfs.Navigate(curr, args[0])
+		newCurr, err := virtualfs.NavigateDirectory(curr, args[0])
 		if err != nil {
 			return fmt.Errorf("ls: %w", err)
 		}
@@ -108,7 +108,7 @@ func commandCd(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	newPwd, err := virtualfs.Navigate(ctxt.pwd, path)
+	newPwd, err := virtualfs.NavigateDirectory(ctxt.pwd, path)
 	if err != nil {
 		return fmt.Errorf("cd: %w", err)
 	}
@@ -119,7 +119,7 @@ func commandCd(args []string, ctxt *context) error {
 func commandCatalog(args []string, ctxt *context) error {
 	curr := ctxt.pwd
 	if len(args) > 0 {
-		newCurr, err := virtualfs.Navigate(curr, args[0])
+		newCurr, err := virtualfs.NavigateDirectory(curr, args[0])
 		if err != nil {
 			return fmt.Errorf("catalog: %w", err)
 		}
@@ -168,7 +168,7 @@ func commandPut(args []string, ctxt *context) error {
 	srcFileName := filepath.Base(srcFilePath)
 	destFolder := ctxt.pwd
 	if len(args) == 2 {
-		newDestFolder, err := virtualfs.Navigate(ctxt.pwd, args[1])
+		newDestFolder, err := virtualfs.NavigateDirectory(ctxt.pwd, args[1])
 		if err != nil {
 			return fmt.Errorf("put: %w", err)
 		}
@@ -189,7 +189,7 @@ func commandPut(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("put: %w", err)
 	}
-	fmt.Printf("File %s uploaded to UUID %s", srcFileName, newUUID)
+	fmt.Printf("File %s uploaded to UUID %s\n", srcFileName, newUUID)
 	// Add file to catalog.
 	if _, err := virtualfs.CreateFile(destFolder, srcFileName, newUUID, metadata); err != nil {
 		return fmt.Errorf("put: %w", err)
@@ -219,7 +219,14 @@ func commandMkdir(args []string, ctxt *context) error {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	if _, err := virtualfs.NavigateCreateLast(ctxt.pwd, path); err != nil { 
+	parentObj, name, err := virtualfs.NavigateParent(ctxt.pwd, path)
+	if err != nil { 
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	if err := virtualfs.ValidateName(name); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	if _, err := virtualfs.CreateDirectory(parentObj, name); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
 	return nil

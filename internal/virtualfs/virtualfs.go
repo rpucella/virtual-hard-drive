@@ -62,6 +62,16 @@ func constructPath(vfs VirtualFS) string {
 	return strings.Join(path, "/")
 }
 
+func ValidateName(name string) error {
+	if name == "." {
+		return fmt.Errorf("name . not allowed")
+	}
+	if name == ".." {
+		return fmt.Errorf("name .. not allowed")
+	}
+	return nil
+}
+
 func spaces(n int) string {
 	return strings.Repeat(" ", n)
 }
@@ -105,24 +115,22 @@ func findDrive(cat VirtualFS) Drive {
 	}
 }
 
-func DecomposePath(path string) []string {
+func decomposePath(path string) []string {
 	return strings.Split(path, "/")
 }
 
-func DecomposePathFile(path string) ([]string, string) {
-	content := strings.Split(path, "/")
-	if len(content) == 0 {
-		return content, ""
-	}
-	return content[:len(content) - 1], content[len(content) - 1]
-}
-
-func Navigate(cat VirtualFS, path string) (VirtualFS, error) {
+func navigate(cat VirtualFS, path string, forceFile bool, forceDir bool) (VirtualFS, error) {
+	// Core function to navigate the virtual file system.
+	// Use NavigatePath, NavigateDirectory, NavigateFile, NavigateParent as API.
 	cleanPath := path
 	if strings.HasSuffix(path, "/") {
 		cleanPath = path[:len(path) - 1]
+		if forceFile {
+			return nil, fmt.Errorf("file path ends with /: %s", path)
+		}
+		forceDir = true
 	}
-	dirs := DecomposePath(cleanPath)
+	dirs := decomposePath(cleanPath)
 	if len(dirs) == 0 {
 		return nil, fmt.Errorf("empty path to navigate")
 	}
@@ -139,97 +147,54 @@ func Navigate(cat VirtualFS, path string) (VirtualFS, error) {
 			}
 			curr = curr.Parent()
 		} else {
+			if !curr.IsDir() {
+				return nil, fmt.Errorf("not a folder: %s", curr.Name())
+			}
 			newCurr, found := curr.GetContent(dir)
 			if !found {
 				return nil, fmt.Errorf("cannot find folder: %s", dir)
 			}
-			if !newCurr.IsDir() {
-				return nil, fmt.Errorf("not a folder: %s", newCurr.Name())
-			}
 			curr = newCurr
 		}
+	}
+	if forceFile && !curr.IsFile() {
+		return nil, fmt.Errorf("not a file: %s", path)
+	}
+	if forceDir && curr.IsFile() {
+		return nil, fmt.Errorf("is a file: %s", path)
 	}
 	return curr, nil
 }
 
-func NavigateCreateLast(cat VirtualFS, path string) (VirtualFS, error) {
+func NavigatePath(cat VirtualFS, path string) (VirtualFS, error) {
+	return navigate(cat, path, false, false)
+}
+
+func NavigateDirectory(cat VirtualFS, path string) (VirtualFS, error) {
+	return navigate(cat, path, false, true)
+}
+
+func NavigateFile(cat VirtualFS, path string) (VirtualFS, error) {
+	return navigate(cat, path, true, false)
+}
+
+func NavigateParent(cat VirtualFS, path string) (VirtualFS, string, error) {
+	// Navigate to the parent of the path, returning that node and the final path
+	// element.
+	// This strips any trailing "/", so only really useful to implement mkdir.
 	cleanPath := path
 	if strings.HasSuffix(path, "/") {
 		cleanPath = path[:len(path) - 1]
 	}
-	dirs := DecomposePath(cleanPath)
-	if len(dirs) == 0 {
-		return nil, fmt.Errorf("empty path to navigate")
+	dirs := decomposePath("./" + cleanPath)  // Make sure we always have at least 2 entries in the path.
+	if len(dirs) < 2 {
+		return nil, "", fmt.Errorf("empty path to navigate")
 	}
-	lastDir := dirs[len(dirs) - 1]
-	if lastDir == "." || lastDir == ".." {
-		return nil, fmt.Errorf("cannot create . or ..")
-	}
-	dirs = dirs[:len(dirs) - 1]
-	var curr VirtualFS = cat
-	for _, dir := range dirs {
-		if dir == "" {
-			// Reset to root!
-			curr = findRoot(curr)
-		} else if dir == "." {
-			// Do nothing!
-		} else if dir == ".." {
-			if curr.Parent() == nil {
-				return nil, fmt.Errorf("root has no parent")
-			}
-			curr = curr.Parent()
-		} else {
-			newCurr, found := curr.GetContent(dir)
-			if !found {
-				return nil, fmt.Errorf("cannot find folder: %s", dir)
-			}
-			if !newCurr.IsDir() {
-				return nil, fmt.Errorf("not a folder: %s", newCurr.Name())
-			}
-			curr = newCurr
-		}
-	}
-	dirObj, err := CreateDirectory(curr, lastDir)
+	parent, err := NavigateDirectory(cat, strings.Join(dirs[:len(dirs) - 1], "/"))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return dirObj, nil
-}	
-
-
-func NavigateFile(cat VirtualFS, path string) (VirtualFS, error) {
-	dirs, file := DecomposePathFile(path)
-	var curr VirtualFS = cat
-	for _, dir := range dirs {
-		if dir == "" {
-			// Reset to root!
-			curr = findRoot(curr)
-		} else if dir == "." {
-			// Do nothing!
-		} else if dir == ".." {
-			if curr.Parent() == nil {
-				return nil, fmt.Errorf("root has no parent")
-			}
-			curr = curr.Parent()
-		} else {
-			newCurr, found := curr.GetContent(dir)
-			if !found {
-				return nil, fmt.Errorf("cannot find folder: %s", dir)
-			}
-			if !newCurr.IsDir() {
-				return nil, fmt.Errorf("not a folder: %s", dir)
-			}
-			curr = newCurr
-		}
-	}
-	fileObj, found := curr.GetContent(file)
-	if !found {
-		return nil, fmt.Errorf("cannot find file: %s", file)
-	}
-	if !fileObj.IsFile() {
-		return nil, fmt.Errorf("not a file: %s", file)
-	}
-	return fileObj, nil
+	return parent, dirs[len(dirs) - 1], nil
 }
 
 func CreateFile(cat VirtualFS, name string, uuid string, metadata string) (VirtualFS, error) {
