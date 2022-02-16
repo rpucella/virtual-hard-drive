@@ -224,15 +224,16 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	}
 	defer f.Close()
 
-	// TODO: Split the file in chunks client-side and store in pieces?
-	ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
-	defer cancel()
-
 	// From:
 	// https://socketloop.com/tutorials/golang-how-to-split-or-chunking-a-file-to-smaller-pieces
 	for i := 0; i < totalPartsNum; i++ {
 		currTarget := fmt.Sprintf("%s.%03d", target, i)
 		fmt.Printf("Uploading to object %s\n", currTarget)
+
+		// Setup a timeout.
+		ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)
+		defer cancel()
+		
 		obj := client.Bucket(bucket).Object(currTarget)
 		wc := obj.NewWriter(ctx)
 		defer wc.Close()
@@ -265,6 +266,9 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 		if (crc32c != attrs.CRC32C) {
 			return "", fmt.Errorf("crc32c of uploaded file different from %x", crc32c)
 		}
+
+		// Cancel the timeout.
+		cancel()
 	}
 	metadata := fmt.Sprintf("%d", totalPartsNum)
 	return metadata, nil
