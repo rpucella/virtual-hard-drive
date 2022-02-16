@@ -211,7 +211,7 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	// Get source file size.
 	attrs, err := os.Stat(path)
 	if err != nil {
-		fmt.Errorf("os.Stat: %v", err)
+		return "", fmt.Errorf("os.Stat: %v", err)
 	}
 	fileSize := attrs.Size()
 	// Calculate total number of parts the file will be chunked into.
