@@ -20,10 +20,7 @@ type context struct{
 }
 
 func main() {
-	// Parse arguments if needed.
-	//args := os.Args[1:]
-
-	reader := bufio.NewReader(os.Stdin)
+	args := os.Args[1:]
 
 	commands := initializeCommands()
 	root, err := virtualfs.NewRoot()
@@ -31,6 +28,23 @@ func main() {
 		panic(err)
 	}
 
+	ctxt := &context{
+		commands,
+		root,
+		root.AsVirtualFS(),
+		false,
+	}
+	
+	if len(args) > 0 {
+		if err := processCommand(ctxt, args[0], args[1:]); err != nil {
+			fmt.Printf("Error: %s\n\n", err)
+		}
+	} else {
+		loop(ctxt)
+	}	
+}
+
+func loop(ctxt *context) {
 	/*
 	fmt.Println("------------------------------------------------------------")
 	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
@@ -38,13 +52,8 @@ func main() {
         */
 	fmt.Println("VIRTUAL HARD DRIVE\n")
 
-	ctxt := context{
-		commands,
-		root,
-		root.AsVirtualFS(),
-		false,
-	}
-	
+	reader := bufio.NewReader(os.Stdin)
+
 	for !ctxt.exit {
 		// Keep going until we nullify the context (flag for quitting)
 		// if ctxt.drive == nil {
@@ -61,25 +70,25 @@ func main() {
 		}
 		comm := fields[0]
 		args := fields[1:]
-		commObj, ok := commands[comm]
-		if !ok {
-			fmt.Printf("Unknown command: %s\n\n", comm)
-			continue
-		}
-		if len(args) < commObj.minArgCount {
-			fmt.Printf("Too few arguments (expected %d): %s\n\n", commObj.minArgCount, comm)
-			continue
-		}
-		if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
-			fmt.Printf("Too many arguments (expected %d): %s\n\n", commObj.maxArgCount, comm)
-			continue
-		}
-		err := commObj.process(args, &ctxt)
-		if err != nil {
+		if err := processCommand(ctxt, comm, args); err != nil {
 			fmt.Printf("Error: %s\n\n", err)
-			continue
 		}
 	}
+}
+
+func processCommand(ctxt *context, comm string, args []string) error {
+	commObj, ok := ctxt.commands[comm]
+	if !ok {
+		return fmt.Errorf("Unknown command: %s", comm)
+	}
+	if len(args) < commObj.minArgCount {
+		return fmt.Errorf("Too few arguments (expected %d): %s", commObj.minArgCount, comm)
+	}
+	if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
+		return fmt.Errorf("Too many arguments (expected %d): %s", commObj.maxArgCount, comm)
+	}
+	err := commObj.process(args, ctxt)
+	return err
 }
 
 // Split a line into fields at spaces.
