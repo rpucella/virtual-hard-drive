@@ -24,6 +24,14 @@ func (d *vfs_dir) IsDir() bool {
 	return true
 }
 
+func (d *vfs_dir) IsRoot() bool {
+	return false
+}
+
+func (d *vfs_dir) IsDrive() bool {
+	return false
+}
+
 func (d *vfs_dir) AsDrive() Drive {
 	return nil
 }
@@ -79,3 +87,20 @@ func (d *vfs_dir) Root() VirtualFS {
 	return findRoot(d)
 }
 
+func (d *vfs_dir) Move(targetDir VirtualFS, name string) error {
+	// Move to `targetDir` under name `name`.
+	if _, found := targetDir.GetContent(name); found {
+		return fmt.Errorf("name %s already exists in %s", name, targetDir.Name())
+	}
+	new_d_struct := *d   // Shallow copy.
+	new_d := &new_d_struct
+	new_d.parent = targetDir
+	new_d.name = name
+	if err := updateCatalogDirectory(new_d); err != nil {
+		return err
+	}
+	// If update was successful, update the tree.
+	d.parent.DelContent(d.name)
+	targetDir.SetContent(name, new_d)
+	return nil
+}

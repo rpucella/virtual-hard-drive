@@ -50,6 +50,14 @@ func (r *drive) IsDir() bool {
 	return true
 }
 
+func (r *drive) IsRoot() bool {
+	return false
+}
+
+func (r *drive) IsDrive() bool {
+	return true
+}
+
 func (r *drive) Path() string {
 	return constructPath(r) + "/"
 }
@@ -112,4 +120,8 @@ func (r *drive) DelContent(name string) {
 		}
 	}
 	r.top.DelContent(name)
+}
+
+func (r *drive) Move(targetDir VirtualFS, name string) error {
+	return fmt.Errorf("cannot move drive")
 }

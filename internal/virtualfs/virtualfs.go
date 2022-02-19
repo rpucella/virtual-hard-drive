@@ -33,6 +33,8 @@ type File interface {
 type VirtualFS interface {
 	IsFile() bool
 	IsDir() bool
+	IsRoot() bool
+	IsDrive() bool
 	AsDrive() Drive
 	AsFile() File
 	Name() string
@@ -46,6 +48,7 @@ type VirtualFS interface {
 	SetContent(string, VirtualFS)
 	DelContent(string)
 	CatalogId() int      // Meaning depends on the kind of virtual FS node we have.
+	Move(VirtualFS, string) error
 }
 
 func constructPath(vfs VirtualFS) string {
@@ -197,6 +200,20 @@ func NavigateParent(cat VirtualFS, path string) (VirtualFS, string, error) {
 	return parent, dirs[len(dirs) - 1], nil
 }
 
+func CheckPath(cat VirtualFS, path string) (VirtualFS, error) {
+	// Check if a filesystem entry exists, returning it if it does.
+	// Returns nil if there is no entry with that name in the final directory.
+	parent, name, err := NavigateParent(cat, path)
+	if err != nil {
+		return nil, err
+	}
+	obj, found := parent.GetContent(name)
+	if !found {
+		return nil, nil
+	}
+	return obj, nil
+}
+	
 func CreateFile(cat VirtualFS, name string, uuid string, metadata string) (VirtualFS, error) {
 	_, found := cat.GetContent(name)
 	if found {
@@ -225,3 +242,4 @@ func CreateDirectory(cat VirtualFS, name string) (VirtualFS, error) {
 	}
 	return dirObj, nil
 }
+

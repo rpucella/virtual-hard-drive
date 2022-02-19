@@ -29,6 +29,14 @@ func (r *root) IsDir() bool {
 	return true
 }
 
+func (r *root) IsRoot() bool {
+	return true
+}
+
+func (r *root) IsDrive() bool {
+	return false
+}
+
 func (r *root) Name() string {
 	return ""
 }
@@ -93,4 +101,8 @@ func NewRoot() (Root, error) {
 	}
 	root.drives = content
 	return root, nil 
+}
+
+func (r *root) Move(targetDir VirtualFS, name string) error {
+	return fmt.Errorf("cannot move root")
 }

@@ -35,17 +35,39 @@ func maxLength(strings []string) int {
 
 func initializeCommands() map[string]command {
 	commands := make(map[string]command)
-	commands["exit"] = command{0, 0, commandQuit, "exit", "Bail out"}
-	commands["help"] = command{0, 0, commandHelp, "help", "List available commands"}
-	//commands["drive"] = command{0, 1, commandDrive, "drive [<name>]", "List or select drive"}
-	commands["ls"] = command{0, 1, commandLs, "ls [<folder>]", "List content of folder"}
-	commands["cd"] = command{0, 1, commandCd, "cd [<folder>]", "Change working folder"}
-	commands["info"] = command{1, 1, commandInfo, "info <file>", "Show file information"}
-	commands["get"] = command{1, 1, commandGet, "get <file>", "Download file to disk"}
-	commands["put"] = command{1, 2, commandPut, "put <local-file> [<folder>]", "Upload local file to drive folder"}
-	commands["catalog"] = command{0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder"}
-	commands["mkdir"] = command{1, 1, commandMkdir, "mkdir <folder>", "Create folder"}
-	commands["hash"] = command{1, 1, commandHash, "hash <local-file>", "Compute CRC32C of local file"}
+	commands["exit"] = command{
+		0, 0, commandQuit, "exit", "Bail out",
+	}
+	commands["help"] = command{
+		0, 0, commandHelp, "help", "List available commands",
+	}
+	commands["ls"] = command{
+		0, 1, commandLs, "ls [<folder>]", "List content of folder",
+	}
+	commands["cd"] = command{
+		0, 1, commandCd, "cd [<folder>]", "Change working folder",
+	}
+	commands["info"] = command{
+		1, 1, commandInfo, "info <file>", "Show file information",
+	}
+	commands["get"] = command{
+		1, 1, commandGet, "get <file>", "Download file to disk",
+	}
+	commands["put"] = command{
+		1, 2, commandPut, "put <local-file> [<folder>]", "Upload local file to drive folder",
+	}
+	commands["catalog"] = command{
+		0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder",
+	}
+	commands["mkdir"] = command{
+		1, 1, commandMkdir, "mkdir <folder>", "Create folder",
+	}
+	commands["hash"] = command{
+		1, 1, commandHash, "hash <local-file>", "Compute CRC32C of local file",
+	}
+	commands["mv"] = command{
+		2, 2, commandMv, "mv <folder/file> <folder/file>", "Move folder or file",
+	}
 	return commands
 }
 
@@ -228,6 +250,9 @@ func commandMkdir(args []string, ctxt *context) error {
 	if err != nil { 
 		return fmt.Errorf("mkdir: %w", err)
 	}
+	if parentObj.IsRoot() {
+		return fmt.Errorf("mkdir: cannot create drive")
+	}
 	if err := virtualfs.ValidateName(name); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
@@ -237,3 +262,37 @@ func commandMkdir(args []string, ctxt *context) error {
 	return nil
 }
 
+func commandMv(args []string, ctxt *context) error {
+	srcPath := args[0]
+	tgtPath := args[1]
+
+	srcObj, err := virtualfs.NavigatePath(ctxt.pwd, srcPath)
+	if err != nil {
+		return fmt.Errorf("mv: %w", err)
+	}
+	if srcObj.IsRoot() || srcObj.IsDrive() {
+		return fmt.Errorf("mv: cannot move root or drive")
+	}
+	// Check destination path.
+	tgtObj, err := virtualfs.CheckPath(ctxt.pwd, tgtPath)
+	if err != nil {
+		return fmt.Errorf("mv: %w", err)
+	}
+	if tgtObj != nil && tgtObj.IsFile() {
+		// Target exists, but it's a file.
+		return fmt.Errorf("mv: cannot overwrite target file: %s", tgtObj.Name())
+	}
+	if tgtObj != nil && tgtObj.IsDir() {
+		// Target exists, and it's a directory.
+		return fmt.Errorf("mv: moving to directory not supported yet")
+	}
+	// Target name doesn't exist. Move away.
+	tgtParent, tgtName, err := virtualfs.NavigateParent(ctxt.pwd, tgtPath)
+	if err != nil {
+		return fmt.Errorf("mv: %w", err)
+	}
+	if err := srcObj.Move(tgtParent, tgtName); err != nil {
+		return fmt.Errorf("mv: %w", err)
+	}
+	return nil
+}

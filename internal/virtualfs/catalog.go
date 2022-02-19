@@ -256,3 +256,53 @@ func createCatalogDirectory(dirObj *vfs_dir) error {
 	db.Close()
 	return nil
 }
+
+func updateCatalogFile(fileObj *vfs_file) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	parentId := fileObj.Parent().CatalogId()
+	if fileObj.Parent().IsDrive() {
+		// If parent is a drive, then parentId must be set to -1
+		parentId = -1
+	}
+
+	stmt, err := db.Prepare("UPDATE files SET name = ?, directoryId = ?, updated = ? where id = ?")
+	if err != nil {
+		return fmt.Errorf("db.Prepare: %w", err)
+	}
+	
+	if _, err := stmt.Exec(fileObj.name, parentId, fileObj.updated.Unix(), fileObj.id); err != nil {
+		return fmt.Errorf("stmt.Exec: %w", err)
+	}
+	db.Close()
+	return nil
+}
+
+func updateCatalogDirectory(dirObj *vfs_dir) error {
+	db, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	parentId := dirObj.Parent().CatalogId()
+	if dirObj.Parent().IsDrive() {
+		// If parent is a drive, then parentId must be set to -1
+		parentId = -1
+	}
+
+	stmt, err := db.Prepare("UPDATE directories SET name = ?, parentId = ? where id = ?")
+	if err != nil {
+		return fmt.Errorf("db.Prepare: %w", err)
+	}
+	
+	if _, err := stmt.Exec(dirObj.name, parentId, dirObj.id); err != nil {
+		return fmt.Errorf("stmt.Exec: %w", err)
+	}
+	db.Close()
+	return nil
+}
