@@ -270,21 +270,17 @@ func commandMv(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("mv: %w", err)
 	}
-	if srcObj.IsRoot() || srcObj.IsDrive() {
-		return fmt.Errorf("mv: cannot move root or drive")
-	}
 	// Check destination path.
 	tgtObj, err := virtualfs.CheckPath(ctxt.pwd, tgtPath)
 	if err != nil {
 		return fmt.Errorf("mv: %w", err)
 	}
-	if tgtObj != nil && tgtObj.IsFile() {
-		// Target exists, but it's a file.
-		return fmt.Errorf("mv: cannot overwrite target file: %s", tgtObj.Name())
-	}
 	if tgtObj != nil && tgtObj.IsDir() {
 		// Target exists, and it's a directory.
-		return fmt.Errorf("mv: moving to directory not supported yet")
+		if err := srcObj.Move(tgtObj, srcObj.Name()); err != nil {
+			return fmt.Errorf("mv: %w", err)
+		}
+		return nil
 	}
 	// Target name doesn't exist. Move away.
 	tgtParent, tgtName, err := virtualfs.NavigateParent(ctxt.pwd, tgtPath)

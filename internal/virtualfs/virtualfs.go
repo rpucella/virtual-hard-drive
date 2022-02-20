@@ -122,7 +122,7 @@ func decomposePath(path string) []string {
 	return strings.Split(path, "/")
 }
 
-func navigate(cat VirtualFS, path string, forceFile bool, forceDir bool) (VirtualFS, error) {
+func navigate(cat VirtualFS, path string, forceFile bool, forceDir bool, checkExists bool) (VirtualFS, error) {
 	// Core function to navigate the virtual file system.
 	// Use NavigatePath, NavigateDirectory, NavigateFile, NavigateParent as API.
 	cleanPath := path
@@ -138,7 +138,7 @@ func navigate(cat VirtualFS, path string, forceFile bool, forceDir bool) (Virtua
 		return nil, fmt.Errorf("empty path to navigate")
 	}
 	var curr VirtualFS = cat
-	for _, dir := range dirs {
+	for i, dir := range dirs {
 		if dir == "" {
 			// Reset to root!
 			curr = findRoot(curr)
@@ -155,7 +155,11 @@ func navigate(cat VirtualFS, path string, forceFile bool, forceDir bool) (Virtua
 			}
 			newCurr, found := curr.GetContent(dir)
 			if !found {
-				return nil, fmt.Errorf("cannot find folder: %s", dir)
+				if checkExists && (i == len(dirs) - 1) {
+					// We're at the last name and we're checking for existence only.
+					return nil, nil
+				}
+				return nil, fmt.Errorf("cannot find %s in %s", dir, curr.Path())
 			}
 			curr = newCurr
 		}
@@ -170,15 +174,15 @@ func navigate(cat VirtualFS, path string, forceFile bool, forceDir bool) (Virtua
 }
 
 func NavigatePath(cat VirtualFS, path string) (VirtualFS, error) {
-	return navigate(cat, path, false, false)
+	return navigate(cat, path, false, false, false)
 }
 
 func NavigateDirectory(cat VirtualFS, path string) (VirtualFS, error) {
-	return navigate(cat, path, false, true)
+	return navigate(cat, path, false, true, false)
 }
 
 func NavigateFile(cat VirtualFS, path string) (VirtualFS, error) {
-	return navigate(cat, path, true, false)
+	return navigate(cat, path, true, false, false)
 }
 
 func NavigateParent(cat VirtualFS, path string) (VirtualFS, string, error) {
@@ -201,15 +205,9 @@ func NavigateParent(cat VirtualFS, path string) (VirtualFS, string, error) {
 }
 
 func CheckPath(cat VirtualFS, path string) (VirtualFS, error) {
-	// Check if a filesystem entry exists, returning it if it does.
-	// Returns nil if there is no entry with that name in the final directory.
-	parent, name, err := NavigateParent(cat, path)
+	obj, err := navigate(cat, path, false, false, true)
 	if err != nil {
 		return nil, err
-	}
-	obj, found := parent.GetContent(name)
-	if !found {
-		return nil, nil
 	}
 	return obj, nil
 }

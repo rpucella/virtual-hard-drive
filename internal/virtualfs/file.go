@@ -108,19 +108,27 @@ func (f *vfs_file) Metadata() string {
 
 func (f *vfs_file) Move(targetDir VirtualFS, name string) error {
 	// Move to `targetDir` under name `name`.
-	if _, found := targetDir.GetContent(name); found {
-		return fmt.Errorf("name %s already exists in %s", name, targetDir.Name())
+	if err := ValidateName(name); err != nil {
+		return err
 	}
-	new_f_struct := *f   // Shallow copy.
-	new_f := &new_f_struct
-	new_f.parent = targetDir
-	new_f.name = name
-	new_f.updated = time.Now()
-	if err := updateCatalogFile(new_f); err != nil {
+	if _, found := targetDir.GetContent(name); found {
+		return fmt.Errorf("name %s already exists in %s", name, targetDir.Path())
+	}
+	if targetDir.IsRoot() {
+		return fmt.Errorf("cannot move file to root")
+	}
+	if f.Drive() != targetDir.Drive() {
+		return fmt.Errorf("cannot move file across drives")
+	}
+	now := time.Now()
+	if err := updateCatalogFile(f.id, name, targetDir, now); err != nil {
 		return err
 	}
 	// If update was successful, update the tree.
 	f.parent.DelContent(f.name)
-	targetDir.SetContent(name, new_f)
+	f.parent = targetDir
+	f.name = name
+	f.updated = time.Now()
+	targetDir.SetContent(name, f)
 	return nil
 }

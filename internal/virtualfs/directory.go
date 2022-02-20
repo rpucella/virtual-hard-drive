@@ -89,18 +89,36 @@ func (d *vfs_dir) Root() VirtualFS {
 
 func (d *vfs_dir) Move(targetDir VirtualFS, name string) error {
 	// Move to `targetDir` under name `name`.
+	if err := ValidateName(name); err != nil {
+		return err
+	}
 	if _, found := targetDir.GetContent(name); found {
 		return fmt.Errorf("name %s already exists in %s", name, targetDir.Name())
 	}
-	new_d_struct := *d   // Shallow copy.
-	new_d := &new_d_struct
-	new_d.parent = targetDir
-	new_d.name = name
-	if err := updateCatalogDirectory(new_d); err != nil {
+	if targetDir.IsRoot() {
+		return fmt.Errorf("cannot move directory to root")
+	}
+	if d.Drive() != targetDir.Drive() {
+		return fmt.Errorf("cannot move directory across drives")
+	}
+	// Also check that the source directory is not an ancestor of the target directory!
+	curr := targetDir
+	for !curr.IsDrive() {
+		// Can actually stop looking when the current folder is the drive
+		// since we can't move the drive per above.
+		if curr == d {
+			return fmt.Errorf("trying to move directory to a descendant")
+		}
+		curr = curr.Parent()
+	}
+	
+	if err := updateCatalogDirectory(d.id, name, targetDir); err != nil {
 		return err
 	}
 	// If update was successful, update the tree.
 	d.parent.DelContent(d.name)
-	targetDir.SetContent(name, new_d)
+	d.parent = targetDir
+	d.name = name
+	targetDir.SetContent(name, d)
 	return nil
 }

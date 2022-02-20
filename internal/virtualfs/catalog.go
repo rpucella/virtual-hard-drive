@@ -233,7 +233,7 @@ func createCatalogDirectory(dirObj *vfs_dir) error {
 		return fmt.Errorf("creating directory at root level")
 	}
 	parentId := dirObj.Parent().CatalogId()
-	if parDrive := dirObj.Parent().AsDrive(); parDrive != nil {
+	if dirObj.Parent().IsDrive() {
 		// If parent is a drive, then parentId must be set to -1
 		parentId = -1
 	}
@@ -257,15 +257,15 @@ func createCatalogDirectory(dirObj *vfs_dir) error {
 	return nil
 }
 
-func updateCatalogFile(fileObj *vfs_file) error {
+func updateCatalogFile(id int, name string, parent VirtualFS, updated time.Time) error {
 	db, err := openDB()
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	parentId := fileObj.Parent().CatalogId()
-	if fileObj.Parent().IsDrive() {
+	parentId := parent.CatalogId()
+	if parent.IsDrive() {
 		// If parent is a drive, then parentId must be set to -1
 		parentId = -1
 	}
@@ -275,22 +275,22 @@ func updateCatalogFile(fileObj *vfs_file) error {
 		return fmt.Errorf("db.Prepare: %w", err)
 	}
 	
-	if _, err := stmt.Exec(fileObj.name, parentId, fileObj.updated.Unix(), fileObj.id); err != nil {
+	if _, err := stmt.Exec(name, parentId, updated.Unix(), id); err != nil {
 		return fmt.Errorf("stmt.Exec: %w", err)
 	}
 	db.Close()
 	return nil
 }
 
-func updateCatalogDirectory(dirObj *vfs_dir) error {
+func updateCatalogDirectory(id int, name string, parent VirtualFS) error {
 	db, err := openDB()
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	parentId := dirObj.Parent().CatalogId()
-	if dirObj.Parent().IsDrive() {
+	parentId := parent.CatalogId()
+	if parent.IsDrive() {
 		// If parent is a drive, then parentId must be set to -1
 		parentId = -1
 	}
@@ -300,7 +300,7 @@ func updateCatalogDirectory(dirObj *vfs_dir) error {
 		return fmt.Errorf("db.Prepare: %w", err)
 	}
 	
-	if _, err := stmt.Exec(dirObj.name, parentId, dirObj.id); err != nil {
+	if _, err := stmt.Exec(name, parentId, id); err != nil {
 		return fmt.Errorf("stmt.Exec: %w", err)
 	}
 	db.Close()
