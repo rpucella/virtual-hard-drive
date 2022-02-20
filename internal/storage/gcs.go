@@ -343,30 +343,38 @@ func (s GoogleCloud) RemoteInfo(uuid string, metadata string) error {
 		if err != nil {
 			return fmt.Errorf("wrong metadata: %s", metadata)
 		}
+		fmt.Printf("Remote:      %s\n", s.Name())
 		for i := int64(0); i < numParts; i++ {
 			currTarget := fmt.Sprintf("%s.%03d", target, i)
 			attrs, err := client.Bucket(bucket).Object(currTarget).Attrs(ctx)
 			if err != nil {
 				return fmt.Errorf("ObjectHandle.Attrs: %v", err)
 			}
-			fmt.Println()
-			fmt.Printf("Bucket:       %s\n", attrs.Bucket)
-			fmt.Printf("Name:         %s\n", attrs.Name)
-			fmt.Printf("Size:         %d\n", attrs.Size)
-			fmt.Printf("MD5:          %x\n", attrs.MD5)
-			fmt.Printf("CRC32C:       %x\n", attrs.CRC32C)
+			if attrs.Size < 1024 {
+				fmt.Printf(" %s  %4d B  %x\n", attrs.Name, attrs.Size, attrs.CRC32C)
+			} else if attrs.Size < 1024 * 1024 {
+				size := attrs.Size / 1024
+				fmt.Printf(" %s  %4d MiB  %x\n", attrs.Name, size, attrs.CRC32C)
+			} else {
+				size := attrs.Size / (1024 * 1024)
+				fmt.Printf(" %s  %4d GiB  %x\n", attrs.Name, size, attrs.CRC32C)
+			}
 		}
 	} else {
 		attrs, err := client.Bucket(bucket).Object(target).Attrs(ctx)
 		if err != nil {
 			return fmt.Errorf("ObjectHandle.Attrs: %v", err)
 		}
-		fmt.Println()
-		fmt.Printf("Bucket:       %s\n", attrs.Bucket)
-		fmt.Printf("Name:         %s\n", attrs.Name)
-		fmt.Printf("Size:         %d\n", attrs.Size)
-		fmt.Printf("MD5:          %x\n", attrs.MD5)
-		fmt.Printf("CRC32C:       %x\n", attrs.CRC32C)
+		fmt.Printf("Remote:      %s\n", s.Name())
+		if attrs.Size < 1024 {
+			fmt.Printf(" %s  %4d B  %x\n", attrs.Name, attrs.Size, attrs.CRC32C)
+		} else if attrs.Size < 1024 * 1024 {
+			size := attrs.Size / 1024
+			fmt.Printf(" %s  %4d MiB  %x\n", attrs.Name, size, attrs.CRC32C)
+		} else {
+			size := attrs.Size / (1024 * 1024)
+			fmt.Printf(" %s  %4d GiB  %x\n", attrs.Name, size, attrs.CRC32C)
+		}
 	}
 	return nil
 }

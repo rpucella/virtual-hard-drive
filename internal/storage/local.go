@@ -105,8 +105,15 @@ func (s LocalFileSystem) RemoteInfo(uuid string, metadata string) error {
 	if err != nil {
 		fmt.Errorf("os.Stat: %v", err)
 	}
-	fmt.Println()
-	fmt.Printf("Name:   %s\n", attrs.Name())
-	fmt.Printf("Size:   %d\n", attrs.Size())
+	fmt.Printf("Remote:      %s\n", s.Name())
+	if attrs.Size() < 1024 {
+		fmt.Printf(" %s  %4d B\n", attrs.Name(), attrs.Size())
+	} else if attrs.Size() < 1024 * 1024 {
+		size := attrs.Size() / 1024
+		fmt.Printf(" %s  %4d MiB\n", attrs.Name(), size)
+	} else {
+		size := attrs.Size() / (1024 * 1024)
+		fmt.Printf(" %s  %4d GiB\n", attrs.Name(), size)
+	}
 	return nil
 }

@@ -81,13 +81,13 @@ func (f *vfs_file) CatalogId() int {
 }
 
 func (f *vfs_file) Print() {
-	fmt.Printf("Name:       %s\n", f.name)
-	fmt.Printf("Path:       %s\n", f.Path())
-	fmt.Printf("UUID:       %s\n", f.uuid)
-	fmt.Printf("Created     %s\n", f.created.Format(time.RFC822))
-	fmt.Printf("Updated:    %s\n", f.updated.Format(time.RFC822))
-	fmt.Printf("Metadata:   %s\n", f.metadata)
-	fmt.Printf("Catalog ID: %d\n", f.id)
+	fmt.Printf("Name:        %s\n", f.name)
+	fmt.Printf("Path:        %s\n", f.Path())
+	fmt.Printf("UUID:        %s\n", f.uuid)
+	fmt.Printf("Created      %s\n", f.created.Format(time.RFC822))
+	fmt.Printf("Updated:     %s\n", f.updated.Format(time.RFC822))
+	fmt.Printf("Metadata:    %s\n", f.metadata)
+	fmt.Printf("Catalog ID:  %d\n", f.id)
 }
 
 func (f *vfs_file) Root() VirtualFS {
@@ -120,8 +120,7 @@ func (f *vfs_file) Move(targetDir VirtualFS, name string) error {
 	if f.Drive() != targetDir.Drive() {
 		return fmt.Errorf("cannot move file across drives")
 	}
-	now := time.Now()
-	if err := updateCatalogFile(f.id, name, targetDir, now); err != nil {
+	if err := updateCatalogFile(f.id, name, targetDir); err != nil {
 		return err
 	}
 	// If update was successful, update the tree.

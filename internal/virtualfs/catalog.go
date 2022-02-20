@@ -257,7 +257,7 @@ func createCatalogDirectory(dirObj *vfs_dir) error {
 	return nil
 }
 
-func updateCatalogFile(id int, name string, parent VirtualFS, updated time.Time) error {
+func updateCatalogFile(id int, name string, parent VirtualFS) error {
 	db, err := openDB()
 	if err != nil {
 		return err
@@ -270,12 +270,12 @@ func updateCatalogFile(id int, name string, parent VirtualFS, updated time.Time)
 		parentId = -1
 	}
 
-	stmt, err := db.Prepare("UPDATE files SET name = ?, directoryId = ?, updated = ? where id = ?")
+	stmt, err := db.Prepare("UPDATE files SET name = ?, directoryId = ? where id = ?")
 	if err != nil {
 		return fmt.Errorf("db.Prepare: %w", err)
 	}
 	
-	if _, err := stmt.Exec(name, parentId, updated.Unix(), id); err != nil {
+	if _, err := stmt.Exec(name, parentId, id); err != nil {
 		return fmt.Errorf("stmt.Exec: %w", err)
 	}
 	db.Close()
