@@ -3,15 +3,17 @@ package virtualfs
 
 import (
 	"fmt"
+	"time"
 	
 	"rpucella.net/virtual-hard-drive/internal/storage"
+	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
 type drive struct{
 	name string
 	description string
-	catalogPath string      // This could be kept private.
 	id int                  // Identifier in catalog.db.
+	catalog catalog.Catalog              
 	storage storage.Storage
 	top VirtualFS           // This is a horrible name.
 	root VirtualFS
@@ -86,7 +88,7 @@ func (r *drive) Print() {
 func (r *drive) ContentList() []string {
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
-			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+			fmt.Printf("ERROR when fetching catalog for %s\n%w\n", r.name, err)
 		}
 	}
 	return r.top.ContentList()
@@ -95,7 +97,7 @@ func (r *drive) ContentList() []string {
 func (r *drive) GetContent(field string) (VirtualFS, bool) {
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
-			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+			fmt.Printf("ERROR when fetching catalog for %s\n%w\n", r.name, err)
 		}
 	}
 	result, found := r.top.GetContent(field)
@@ -106,7 +108,7 @@ func (r *drive) SetContent(name string, value VirtualFS) {
 	// Do nothing silently?
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
-			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+			fmt.Printf("ERROR when fetching catalog for %s\n%w\n", r.name, err)
 		}
 	}
 	r.top.SetContent(name, value)
@@ -116,7 +118,7 @@ func (r *drive) DelContent(name string) {
 	// Do nothing silently?
 	if r.top == nil {
 		if err := fetchCatalog(r); err != nil {
-			fmt.Printf("ERROR THAT CANNOT BE CAUGHT when fetching catalog for %s\n%w\n", r.name, err)
+			fmt.Printf("ERROR when fetching catalog for %s\n%w\n", r.name, err)
 		}
 	}
 	r.top.DelContent(name)
@@ -124,4 +126,72 @@ func (r *drive) DelContent(name string) {
 
 func (r *drive) Move(targetDir VirtualFS, name string) error {
 	return fmt.Errorf("cannot move drive")
+}
+
+func fetchCatalog(r *drive) error {
+	directories, err := r.catalog.FetchDirectories(r.id)
+	if err != nil {
+		return err
+	}
+	files, err := r.catalog.FetchFiles(r.id)
+	if err != nil {
+		return err
+	}
+	
+	dirMap := make(map[int]*vfs_dir)
+	parentMap := make(map[int]int)
+	for id, dir := range directories {
+		dirMap[id] = &vfs_dir{dir.Name, make(map[string]VirtualFS), nil, id}
+		parentMap[id] = dir.ParentId
+	}
+	r.top = &vfs_dir{"", make(map[string]VirtualFS), r.root, -1}
+	for _, dir := range dirMap {
+		name := dir.name
+		var parent VirtualFS
+		if parentMap[dir.id] < 0 {
+			parent = r
+		} else {
+			parent = dirMap[parentMap[dir.id]]
+		}
+		dir.parent = parent
+		parent.SetContent(name, dir)
+	}
+	for id, file := range files {
+		name := file.Name
+		var dir VirtualFS
+		if file.DirectoryId < 0 {
+			dir = r
+		} else {
+			dir = dirMap[file.DirectoryId]
+		}
+		fileObj := &vfs_file{name, file.UUID, dir, file.Created, file.Updated, file.Metadata, id}
+		dir.SetContent(name, fileObj)
+	}
+	return nil
+}
+
+func (r *drive) createFile(name string, uuid string, dirId int, created time.Time, updated time.Time, metadata string) (int, error) {
+	fileId, err := r.catalog.CreateFile(r.id, name, uuid, dirId, created, updated, metadata)
+	if err != nil {
+		return 0, err
+	}
+	return fileId, nil
+}
+
+func (r *drive) createDirectory(name string, parentId int) (int, error) {
+	dirId, err := r.catalog.CreateDirectory(r.id, name, parentId)
+	if err != nil {
+		return 0, err
+	}
+	return dirId, nil
+}
+
+func (r *drive) updateFile(id int, name string, dirId int) error {
+	err := r.catalog.UpdateFile(id, name, dirId)
+	return err
+}
+
+func (r *drive) updateDirectory(id int, name string, parentId int) error {
+	err := r.catalog.UpdateDirectory(id, name, parentId)
+	return err
 }

@@ -9,6 +9,7 @@ import (
 	"unicode"
 	
 	"rpucella.net/virtual-hard-drive/internal/virtualfs"
+	"rpucella.net/virtual-hard-drive/internal/catalog"
 )
 
 type context struct{
@@ -23,7 +24,11 @@ func main() {
 	args := os.Args[1:]
 
 	commands := initializeCommands()
-	root, err := virtualfs.NewRoot()
+	catalog, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	root, err := virtualfs.NewRoot(catalog)
 	if err != nil {
 		panic(err)
 	}

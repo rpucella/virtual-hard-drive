@@ -111,8 +111,12 @@ func (d *vfs_dir) Move(targetDir VirtualFS, name string) error {
 		}
 		curr = curr.Parent()
 	}
-	
-	if err := updateCatalogDirectory(d.id, name, targetDir); err != nil {
+	parentId := targetDir.CatalogId()
+	if targetDir.IsDrive() {
+		// Override if we're putting it in a drive
+		parentId = -1
+	}
+	if err := d.Drive().updateDirectory(d.id, name, parentId); err != nil {
 		return err
 	}
 	// If update was successful, update the tree.

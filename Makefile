@@ -1,4 +1,4 @@
-build:
+build: etags
 	go build -o bin/vhd ./cmd/vhd
 
 fmt:

@@ -20,6 +20,10 @@ type Drive interface {
 	Storage() storage.Storage
 	AsVirtualFS() VirtualFS
 	CatalogId() int
+	createFile(string, string, int, time.Time, time.Time, string) (int, error)
+	createDirectory(string, int) (int, error)
+	updateFile(int, string, int) error
+	updateDirectory(int, string, int) error
 }
 
 type File interface {
@@ -212,32 +216,50 @@ func CheckPath(cat VirtualFS, path string) (VirtualFS, error) {
 	return obj, nil
 }
 	
-func CreateFile(cat VirtualFS, name string, uuid string, metadata string) (VirtualFS, error) {
-	_, found := cat.GetContent(name)
+func CreateFile(dir VirtualFS, name string, uuid string, metadata string) (VirtualFS, error) {
+	if dir.IsRoot() {
+		return nil, fmt.Errorf("cannot create file in root")
+	}
+	_, found := dir.GetContent(name)
 	if found {
-		return nil, fmt.Errorf("entry %s already exists at %s", name, cat.Path())
+		return nil, fmt.Errorf("entry %s already exists at %s", name, dir.Path())
 	}
 	now := time.Now()
-	fileObj := &vfs_file{name, uuid, cat, now, now, metadata, -2}
-	cat.SetContent(name, fileObj)
-	if err := createCatalogFile(fileObj); err != nil {
-		cat.DelContent(name)
+	dirId := dir.CatalogId()
+	if dir.IsDrive() {
+		// Override if we're putting it in a drive
+		dirId = -1
+	}
+	drive := dir.Drive()
+	fileId, err := drive.createFile(name, uuid, dirId, now, now, metadata)
+	if err != nil {
 		return nil, err
 	}
+	fileObj := &vfs_file{name, uuid, dir, now, now, metadata, fileId}
+	dir.SetContent(name, fileObj)
 	return fileObj, nil
 }
 
-func CreateDirectory(cat VirtualFS, name string) (VirtualFS, error) {
-	_, found := cat.GetContent(name)
-	if found {
-		return nil, fmt.Errorf("entry %s already exists at %s", name, cat.Path())
+func CreateDirectory(dir VirtualFS, name string) (VirtualFS, error) {
+	if dir.IsRoot() {
+		return nil, fmt.Errorf("cannot create directory in root")
 	}
-	dirObj := &vfs_dir{name, make(map[string]VirtualFS), cat, -2}
-	cat.SetContent(name, dirObj)
-	if err := createCatalogDirectory(dirObj); err != nil {
-		cat.DelContent(name)
+	_, found := dir.GetContent(name)
+	if found {
+		return nil, fmt.Errorf("entry %s already exists at %s", name, dir.Path())
+	}
+	parentId := dir.CatalogId()
+	if dir.IsDrive() {
+		// Override if we're putting it in a drive
+		parentId = -1
+	}
+	drive := dir.Drive()
+	dirId, err := drive.createDirectory(name, parentId)
+	if err != nil {
 		return nil, err
 	}
+	dirObj := &vfs_dir{name, make(map[string]VirtualFS), dir, dirId}
+	dir.SetContent(name, dirObj)
 	return dirObj, nil
 }
 

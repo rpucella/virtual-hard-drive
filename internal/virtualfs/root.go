@@ -3,6 +3,8 @@ package virtualfs
 
 import (
 	"fmt"
+	"rpucella.net/virtual-hard-drive/internal/catalog"
+	"rpucella.net/virtual-hard-drive/internal/storage"
 )
 
 type root struct {
@@ -93,13 +95,33 @@ func (r *root) CatalogId () int {
 	return -1
 }
 
-func NewRoot() (Root, error) {
+func NewRoot(c catalog.Catalog) (Root, error) {
 	root := &root{}
-	content, err := fetchDrives(root)
+	content, err := c.FetchDrives()
 	if err != nil {
 		return nil, fmt.Errorf("cannot read drives: %w", err)
 	}
-	root.drives = content
+	root.drives = make(map[string]Drive)
+	for _, driveDesc := range content {
+		var store storage.Storage
+		if driveDesc.Type == "gcs" {
+			store = storage.NewGoogleCloud(driveDesc.Location)
+		} else if driveDesc.Type == "local" {
+			store = storage.NewLocalFileSystem(driveDesc.Location)
+		} else {
+			// Unknown type - skip silently.
+			continue
+		}
+		root.drives[driveDesc.Name] = &drive{
+			driveDesc.Name,
+			driveDesc.Description,
+			driveDesc.Id,
+			c,
+			store,
+			nil,
+			root.AsVirtualFS(),
+		}
+	}
 	return root, nil 
 }
 

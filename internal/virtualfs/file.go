@@ -120,7 +120,12 @@ func (f *vfs_file) Move(targetDir VirtualFS, name string) error {
 	if f.Drive() != targetDir.Drive() {
 		return fmt.Errorf("cannot move file across drives")
 	}
-	if err := updateCatalogFile(f.id, name, targetDir); err != nil {
+	dirId := targetDir.CatalogId()
+	if targetDir.IsDrive() {
+		// Override if we're putting it in a drive
+		dirId = -1
+	}
+	if err := f.Drive().updateFile(f.id, name, dirId); err != nil {
 		return err
 	}
 	// If update was successful, update the tree.
