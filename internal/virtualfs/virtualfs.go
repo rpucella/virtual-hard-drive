@@ -24,6 +24,7 @@ type Drive interface {
 	createDirectory(string, int) (int, error)
 	updateFile(int, string, int) error
 	updateDirectory(int, string, int) error
+	countFilesInDir(int) (int, error)
 }
 
 type File interface {
@@ -34,6 +35,11 @@ type File interface {
 	Metadata() string       // Storage-specific metadata (such as # of chunks),
 }
 
+type Directory interface {
+	Name() string
+	CountFiles() (int, error)
+}
+
 type VirtualFS interface {
 	IsFile() bool
 	IsDir() bool
@@ -41,6 +47,7 @@ type VirtualFS interface {
 	IsDrive() bool
 	AsDrive() Drive
 	AsFile() File
+	AsDir() Directory
 	Name() string
 	Path() string        // Full path including drive name.    
 	Parent() VirtualFS
@@ -53,6 +60,7 @@ type VirtualFS interface {
 	DelContent(string)
 	CatalogId() int      // Meaning depends on the kind of virtual FS node we have.
 	Move(VirtualFS, string) error
+	CountFiles() (int, error)
 }
 
 func constructPath(vfs VirtualFS) string {

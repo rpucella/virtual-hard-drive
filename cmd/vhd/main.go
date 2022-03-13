@@ -50,12 +50,19 @@ func main() {
 }
 
 func loop(ctxt *context) {
-	/*
-	fmt.Println("------------------------------------------------------------")
-	fmt.Println("                   VIRTUAL HARD DRIVE                       ")
-	fmt.Println("------------------------------------------------------------")
-        */
-	fmt.Println("VIRTUAL HARD DRIVE\n")
+	
+	// https://patorjk.com/software/taag/#p=display&f=Colossal&t=Virtual%20HD
+	
+	fmt.Print(`
+888     888 d8b         888                      888      888    888 8888888b.  
+888     888 Y8P         888                      888      888    888 888  "Y88b 
+888     888             888                      888      888    888 888    888 
+Y88b   d88P 888 888d888 888888 888  888  8888b.  888      8888888888 888    888 
+ Y88b d88P  888 888P"   888    888  888     "88b 888      888    888 888    888 
+  Y88o88P   888 888     888    888  888 .d888888 888      888    888 888    888 
+   Y888P    888 888     Y88b.  Y88b 888 888  888 888      888    888 888  .d88P 
+    Y8P     888 888      "Y888  "Y88888 "Y888888 888      888    888 8888888P"
+`)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -66,9 +73,13 @@ func loop(ctxt *context) {
 		// } else {
 		// 	fmt.Printf("\n%s:%s ", ctxt.drive.Name(), ctxt.pwd.Path())
 		// }
-		fmt.Printf("%s ", ctxt.pwd.Path())
+		path := ctxt.pwd.Path()
+		if len(path) > 0 {
+			// strip off final /
+			path = path[:len(path) - 1]
+		}
+		fmt.Printf("\n\u001b[1m%s>\u001b[0m ", path)
 		line, _ := reader.ReadString('\n')
-		fmt.Println()
 		fields := split(line) // strings.Fields(line)
 		if len(fields) == 0 {
 			continue
@@ -76,7 +87,7 @@ func loop(ctxt *context) {
 		comm := fields[0]
 		args := fields[1:]
 		if err := processCommand(ctxt, comm, args); err != nil {
-			fmt.Printf("Error: %s\n\n", err)
+			fmt.Printf("Error: %s\n", err)
 		}
 	}
 }

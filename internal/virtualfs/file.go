@@ -24,6 +24,10 @@ func (f *vfs_file) AsFile() File {
 	return f
 }
 
+func (f *vfs_file) AsDir() Directory {
+	return nil
+}
+
 func (f *vfs_file) IsDir() bool {
 	return false
 }
@@ -104,6 +108,10 @@ func (f *vfs_file) Updated() time.Time {
 
 func (f *vfs_file) Metadata() string {
 	return f.metadata
+}
+
+func (r *vfs_file) CountFiles() (int, error) {
+	return 0, nil
 }
 
 func (f *vfs_file) Move(targetDir VirtualFS, name string) error {

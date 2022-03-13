@@ -39,5 +39,7 @@ type Catalog interface {
 	CreateDirectory(int, string, int) (int, error)
 	UpdateFile(int, string, int) error
 	UpdateDirectory(int, string, int) error
+	CountFilesInDirectory(int) (int, error)
+	CountFilesInDrive(int) (int, error)
 }
 

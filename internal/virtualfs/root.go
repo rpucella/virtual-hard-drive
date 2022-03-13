@@ -27,6 +27,10 @@ func (r *root) AsFile() File {
 	return nil
 }
 
+func (r *root) AsDir() Directory {
+	return nil
+}
+
 func (r *root) IsDir() bool {
 	return true
 }
@@ -91,8 +95,12 @@ func (r *root) DelContent(name string) {
 	// Do nothing.
 }
 
-func (r *root) CatalogId () int {
+func (r *root) CatalogId() int {
 	return -1
+}
+
+func (r *root) CountFiles() (int, error) {
+	return 0, nil
 }
 
 func NewRoot(c catalog.Catalog) (Root, error) {

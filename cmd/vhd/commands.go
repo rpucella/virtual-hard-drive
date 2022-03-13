@@ -83,7 +83,6 @@ func commandHelp(args []string, ctxt *context) error {
 	for _, k := range keys {
 		fmt.Printf("%*s   %s\n", -width, ctxt.commands[k].usage, ctxt.commands[k].help)
 	}
-	fmt.Println()
 	return nil
 }
 
@@ -101,30 +100,33 @@ func commandLs(args []string, ctxt *context) error {
 		}
 		curr = newCurr
 	}
-	dirs := make([]string, 0, len(curr.ContentList()))
-	files := make([]string, 0, len(curr.ContentList()))
+	// Compute widths of names and sort the names list.
+	width := 0
+	names := make([]string, 0, len(curr.ContentList()))
 	for _, k := range curr.ContentList() {
+		l := len(k)
+		if l > width {
+			width = l
+		}
+		names = append(names, k)
+	}
+	width += 1
+	sort.Strings(names)
+	for _, k := range names {
 		sub, _ := curr.GetContent(k)
-		if sub.IsDir() {
-			dirs = append(dirs, sub.Name())
-		} else {
-			files = append(files, sub.Name())
+		if dir := sub.AsDir(); dir != nil { 
+			count, err := dir.CountFiles()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%*s     %6d\n", -width, dir.Name() + "/", count)
 		}
 	}
-	sort.Strings(dirs)
-	sort.Strings(files)
-	for _, name := range dirs {
-		fmt.Printf("%s/\n", name)
-	}
-	width := maxLength(files)
-	for _, name := range files {
-		file, _ := curr.GetContent(name)
+	for _, k := range names {
+		file, _ := curr.GetContent(k)
 		if file := file.AsFile(); file != nil { 
-			fmt.Printf("%*s     %-40s  %s\n", -width, name, file.UUID(), file.Updated().Format(time.RFC822))
+			fmt.Printf("%*s     %20s\n", -width, file.Name(), file.Updated().Format(time.RFC822))
 		}
-	}
-	if len(dirs) > 0 || len(files) > 0 {
-		fmt.Println()
 	}
 	return nil
 }
@@ -169,7 +171,6 @@ func commandInfo(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("remote: %w", err)
 	}
-	fmt.Println()
 	return nil
 }
 

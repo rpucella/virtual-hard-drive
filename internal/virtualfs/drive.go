@@ -48,6 +48,10 @@ func (r *drive) AsFile() File {
 	return nil
 }
 
+func (r *drive) AsDir() Directory {
+	return r
+}
+
 func (r *drive) IsDir() bool {
 	return true
 }
@@ -194,4 +198,20 @@ func (r *drive) updateFile(id int, name string, dirId int) error {
 func (r *drive) updateDirectory(id int, name string, parentId int) error {
 	err := r.catalog.UpdateDirectory(id, name, parentId)
 	return err
+}
+
+func (r *drive) countFilesInDir(dirId int) (int, error) {
+	count, err := r.catalog.CountFilesInDirectory(dirId)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (d *drive) CountFiles() (int, error) {
+	count, err := d.catalog.CountFilesInDrive(d.id)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

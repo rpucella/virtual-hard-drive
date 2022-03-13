@@ -232,3 +232,59 @@ func Load() (Catalog, error) {
 	}
 	return result, nil
 }
+
+func (c *sqlCatalog) CountFilesInDirectory(dirId int) (int, error) {
+	db, err := openDB(c)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	
+	stmt, err := db.Prepare(`  with recursive subfolders(name, id) as (
+                                     select name, id from directories where parentId = ?
+                                     union all
+                                     select directories.name, directories.id 
+                                       from directories, subfolders 
+                                       where directories.parentId = subfolders.id
+                                   ) select count(*) from files where directoryId = ? or directoryId in (select id from subfolders)`)
+	if err != nil {
+		return 0, fmt.Errorf("db.Prepare: %w", err)
+	}
+	rows, err := stmt.Query(dirId, dirId)
+	if err != nil {
+		return 0, fmt.Errorf("stmt.Query: %w", err)
+	}
+	var count int
+	for rows.Next() {
+		err = rows.Scan(&count)
+		if err != nil {
+			return 0, fmt.Errorf("error reading count table: %w", err)
+		}
+	}
+	return count, nil
+}
+
+func (c *sqlCatalog) CountFilesInDrive(driveId int) (int, error) {
+	db, err := openDB(c)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	
+	stmt, err := db.Prepare(`select count(*) from files where driveId = ?`)
+	if err != nil {
+		return 0, fmt.Errorf("db.Prepare: %w", err)
+	}
+	rows, err := stmt.Query(driveId)
+	if err != nil {
+		return 0, fmt.Errorf("stmt.Query: %w", err)
+	}
+	var count int
+	for rows.Next() {
+		err = rows.Scan(&count)
+		if err != nil {
+			return 0, fmt.Errorf("error reading count table: %w", err)
+		}
+	}
+	return count, nil
+}

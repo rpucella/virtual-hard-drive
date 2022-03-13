@@ -20,6 +20,10 @@ func (d *vfs_dir) AsFile() File {
 	return nil
 }
 
+func (d *vfs_dir) AsDir() Directory {
+	return d
+}
+
 func (d *vfs_dir) IsDir() bool {
 	return true
 }
@@ -125,4 +129,9 @@ func (d *vfs_dir) Move(targetDir VirtualFS, name string) error {
 	d.name = name
 	targetDir.SetContent(name, d)
 	return nil
+}
+
+func (d *vfs_dir) CountFiles() (int, error) {
+	count, err := d.Drive().countFilesInDir(d.id)
+	return count, err
 }
