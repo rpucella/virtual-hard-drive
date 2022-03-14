@@ -10,6 +10,7 @@ import (
 	"os"
 	"math"
 	"strconv"
+	"path/filepath"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
@@ -198,6 +199,7 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	bucket := s.bucket
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
+	fileName := filepath.Base(path)
 	if err != nil {
 		return "", fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -216,7 +218,7 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	fileSize := attrs.Size()
 	// Calculate total number of parts the file will be chunked into.
 	totalPartsNum := int(math.Ceil(float64(fileSize) / float64(CHUNK_SIZE)))
-	fmt.Printf("Splitting into %d objects\n", totalPartsNum)
+	fmt.Printf("File %s: %d objects\n", fileName, totalPartsNum)
 
 	f, err := os.Open(path)
 	if err != nil {

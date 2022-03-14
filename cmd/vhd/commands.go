@@ -10,6 +10,8 @@ import (
 	"io/ioutil"
 	"io"
 	"os"
+	"errors"
+	"strings"
 
 	"rpucella.net/virtual-hard-drive/internal/util"
 	"rpucella.net/virtual-hard-drive/internal/virtualfs"
@@ -42,31 +44,31 @@ func initializeCommands() map[string]command {
 		0, 0, commandHelp, "help", "List available commands",
 	}
 	commands["ls"] = command{
-		0, 1, commandLs, "ls [<folder>]", "List content of folder",
+		0, 1, commandLs, "ls [<folder>]", "List content of remote folder",
 	}
 	commands["cd"] = command{
-		0, 1, commandCd, "cd [<folder>]", "Change working folder",
+		0, 1, commandCd, "cd [<folder>]", "Change working remote folder",
 	}
 	commands["info"] = command{
-		1, 1, commandInfo, "info <file>", "Show file information",
+		1, 1, commandInfo, "info <file>", "Show remote file information",
 	}
 	commands["get"] = command{
-		1, 1, commandGet, "get <file>", "Download file to disk",
+		1, 1, commandGet, "get <file>", "Download remote file to disk",
 	}
 	commands["put"] = command{
-		1, 2, commandPut, "put <local-file> [<folder>]", "Upload local file to drive folder",
+		1, -1, commandPut, "put <local-file/folder> ... [<folder>]", "Upload local files to remote folder",
 	}
 	commands["catalog"] = command{
-		0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at folder",
+		0, 1, commandCatalog, "catalog [<folder>]", "Show catalog at remote folder",
 	}
 	commands["mkdir"] = command{
-		1, 1, commandMkdir, "mkdir <folder>", "Create folder",
+		1, 1, commandMkdir, "mkdir <folder>", "Create remote folder",
 	}
 	commands["hash"] = command{
 		1, 1, commandHash, "hash <local-file>", "Compute CRC32C of local file",
 	}
 	commands["mv"] = command{
-		2, 2, commandMv, "mv <folder/file> <folder/file>", "Move folder or file",
+		2, 2, commandMv, "mv <folder/file> <folder/file>", "Move remote folder or file",
 	}
 	return commands
 }
@@ -174,6 +176,25 @@ func commandInfo(args []string, ctxt *context) error {
 	return nil
 }
 
+func isExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func isDirectory(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	return fileInfo.IsDir(), nil
+}
+
 func commandGet(args []string, ctxt *context) error {
 	fileObj, err := virtualfs.NavigateFile(ctxt.pwd, args[0])
 	if err != nil {
@@ -187,40 +208,102 @@ func commandGet(args []string, ctxt *context) error {
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	fmt.Printf("UUID %s downloaded to file %s\n\n", file.UUID(), fileObj.Name())
+	fmt.Printf("UUID %s downloaded to file %s\n", file.UUID(), fileObj.Name())
 	return nil
 }
 
 func commandPut(args []string, ctxt *context) error {
-	srcFilePath := args[0]
-	srcFileName := filepath.Base(srcFilePath)
 	destFolder := ctxt.pwd
-	if len(args) == 2 {
-		newDestFolder, err := virtualfs.NavigateDirectory(ctxt.pwd, args[1])
-		if err != nil {
-			return fmt.Errorf("put: %w", err)
+	lastArg := len(args)
+
+	// Global to control whether to show a separating line above the upload info.
+	first := true
+
+	var process func(string, virtualfs.VirtualFS) error
+	process = func(srcFilePath string, destFolder virtualfs.VirtualFS) error {
+		srcName := filepath.Base(srcFilePath)
+		_, found := destFolder.GetContent(srcName)
+		if found {
+			// Confirm overwrite? Or force user to delete first?
+			return fmt.Errorf("file %s already exists in %s", srcName, destFolder.Path())
 		}
-		destFolder = newDestFolder
+		isDir, err := isDirectory(srcFilePath)
+		if err != nil {
+			return err
+		}
+		if isDir {
+			if destFolder.IsRoot() {
+				return fmt.Errorf("cannot create drive")
+			}
+			if err := virtualfs.ValidateName(srcName); err != nil {
+				return err
+			}
+			dirObj, err := virtualfs.CreateDirectory(destFolder, srcName)
+			if err != nil {
+				return err
+			}
+			files, err := ioutil.ReadDir(srcFilePath)
+			if err != nil {
+				return err
+			}
+			for _, f := range files {
+				if strings.HasPrefix(f.Name(), ".") {
+					// Skip hidden files.
+					continue
+				}
+				if err := process(filepath.Join(srcFilePath, f.Name()), dirObj); err != nil {
+					fmt.Println(fmt.Errorf("Upload SKIPPED - %w\n", err))
+				}
+			}
+		} else { 
+			newUUID := uuid.NewString()
+			drive := destFolder.Drive()
+			if drive == nil {
+				return fmt.Errorf("no drive for folder: %s", destFolder.Path())
+			}
+			// Upload to storage.
+			if first {
+				first = false
+			} else {
+				fmt.Println("----------------------------------------")
+			}
+			metadata, err := drive.Storage().UploadFile(srcFilePath, newUUID)
+			if err != nil {
+				return fmt.Errorf("put: %w", err)
+			}
+			fmt.Printf("Uploaded to UUID %s\n", newUUID)
+			// Add file to catalog.
+			if _, err := virtualfs.CreateFile(destFolder, srcName, newUUID, metadata); err != nil {
+				return fmt.Errorf("put: %w", err)
+			}
+		}
+		return nil
 	}
-	_, found := destFolder.GetContent(srcFileName)
-	if found {
-		// Confirm overwrite? Or force user to delete first?
-		return fmt.Errorf("put: file %s already exists in %s", srcFileName, destFolder.Path())
+
+	if len(args) > 1 {
+		// Check the last argument. Does it describe a local file/folder or a remote folder?
+		if exists, _ := isExists(args[lastArg - 1]); exists {
+			// Last argument is a local file - is is also a remote folder?
+			if _, err := virtualfs.NavigateDirectory(ctxt.pwd, args[lastArg - 1]); err == nil {
+				// It's also a folder - ambiguous command.
+				return fmt.Errorf("put: last arg is a local file/folder and a remote folder")
+			}
+			// It's not a folder, so all arguments are local.
+		} else {
+			// Last argument is not local - it better be a remote folder
+			newDestFolder, err := virtualfs.NavigateDirectory(ctxt.pwd, args[lastArg - 1])
+			if err != nil {
+				// It's not a folder either - fail.
+				return fmt.Errorf("put: %w", err)
+			}
+			destFolder = newDestFolder
+			lastArg = lastArg - 1
+		}
 	}
-	newUUID := uuid.NewString()
-	drive := destFolder.Drive()
-	if drive == nil {
-		return fmt.Errorf("no drive for folder: %s", destFolder.Path())
-	}
-	// Upload to storage.
-	metadata, err := drive.Storage().UploadFile(srcFilePath, newUUID)
-	if err != nil {
-		return fmt.Errorf("put: %w", err)
-	}
-	fmt.Printf("File %s uploaded to UUID %s\n\n", srcFileName, newUUID)
-	// Add file to catalog.
-	if _, err := virtualfs.CreateFile(destFolder, srcFileName, newUUID, metadata); err != nil {
-		return fmt.Errorf("put: %w", err)
+	for i := 0; i < lastArg; i++ {
+		if err := process(args[i], destFolder); err != nil {
+			fmt.Println(fmt.Errorf("Upload SKIPPED - %w\n", err))
+		}
 	}
 	return nil
 }
@@ -238,7 +321,7 @@ func commandHash(args []string, ctxt *context) error {
 	if _, err := io.Copy(crcw, src); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
-	fmt.Printf("CRC32C:  %x\n\n", crcw.Sum())
+	fmt.Printf("CRC32C:  %x\n", crcw.Sum())
 	return nil
 }
 
