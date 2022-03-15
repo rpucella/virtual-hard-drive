@@ -218,6 +218,7 @@ func commandPut(args []string, ctxt *context) error {
 
 	// Global to control whether to show a separating line above the upload info.
 	first := true
+	failures := 0
 
 	var process func(string, virtualfs.VirtualFS) error
 	process = func(srcFilePath string, destFolder virtualfs.VirtualFS) error {
@@ -252,6 +253,7 @@ func commandPut(args []string, ctxt *context) error {
 					continue
 				}
 				if err := process(filepath.Join(srcFilePath, f.Name()), dirObj); err != nil {
+					failures += 1
 					fmt.Println(fmt.Errorf("Upload SKIPPED - %w\n", err))
 				}
 			}
@@ -302,8 +304,12 @@ func commandPut(args []string, ctxt *context) error {
 	}
 	for i := 0; i < lastArg; i++ {
 		if err := process(args[i], destFolder); err != nil {
+			failures += 1
 			fmt.Println(fmt.Errorf("Upload SKIPPED - %w\n", err))
 		}
+	}
+	if failures > 0 {
+		fmt.Printf("\nNumber of failures: %d\n", failures)
 	}
 	return nil
 }
