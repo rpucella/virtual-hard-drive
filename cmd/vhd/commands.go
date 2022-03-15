@@ -6,7 +6,6 @@ import (
 	"sort"
 	"github.com/google/uuid"
 	"path/filepath"
-	"time"
 	"io/ioutil"
 	"io"
 	"os"
@@ -102,17 +101,10 @@ func commandLs(args []string, ctxt *context) error {
 		}
 		curr = newCurr
 	}
-	// Compute widths of names and sort the names list.
-	width := 0
 	names := make([]string, 0, len(curr.ContentList()))
 	for _, k := range curr.ContentList() {
-		l := len(k)
-		if l > width {
-			width = l
-		}
 		names = append(names, k)
 	}
-	width += 1
 	sort.Strings(names)
 	for _, k := range names {
 		sub, _ := curr.GetContent(k)
@@ -121,13 +113,14 @@ func commandLs(args []string, ctxt *context) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%*s     %6d\n", -width, dir.Name() + "/", count)
+			fmt.Printf(" %16d   %s\n", count, dir.Name() + "/")
 		}
 	}
+	tFormat := "2006-01-02 15:04"
 	for _, k := range names {
 		file, _ := curr.GetContent(k)
 		if file := file.AsFile(); file != nil { 
-			fmt.Printf("%*s     %20s\n", -width, file.Name(), file.Updated().Format(time.RFC822))
+			fmt.Printf(" %16s   %s\n", file.Updated().Format(tFormat), file.Name())
 		}
 	}
 	return nil

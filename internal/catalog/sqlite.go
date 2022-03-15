@@ -53,7 +53,7 @@ func (c *sqlCatalog) FetchDrives() (map[int]DriveDescriptor, error) {
 		}
 		drives[id] = DriveDescriptor{id, name, host, address, description}
 	}
-	db.Close()
+	// db.Close()
 	return drives, nil
 }
 
@@ -64,13 +64,9 @@ func (c *sqlCatalog) FetchDirectories(driveId int) (map[int]DirectoryDescriptor,
 	}
 	defer db.Close()
 	
-	stmt, err := db.Prepare("SELECT id, name, parentId FROM directories WHERE driveId = ?")
+	rows, err := db.Query("SELECT id, name, parentId FROM directories WHERE driveId = ?", driveId)
 	if err != nil {
-		return nil, fmt.Errorf("db.Prepare(directories): %w", err)
-	}
-	rows, err := stmt.Query(driveId)
-	if err != nil {
-		return nil, fmt.Errorf("stmt.Query(directories): %w", err)
+		return nil, fmt.Errorf("db.Query(directories): %w", err)
 	}
 	directories := make(map[int]DirectoryDescriptor)
 	var id int
@@ -93,13 +89,9 @@ func (c *sqlCatalog) FetchFiles(driveId int) (map[int]FileDescriptor, error) {
 	}
 	defer db.Close()
 	
-	stmt, err := db.Prepare("SELECT id, name, directoryId, uuid, created, updated, metadata FROM files WHERE driveId = ?")
+	rows, err := db.Query("SELECT id, name, directoryId, uuid, created, updated, metadata FROM files WHERE driveId = ?", driveId)
 	if err != nil {
-		return nil, fmt.Errorf("db.Prepare(files): %w", err)
-	}
-	rows, err := stmt.Query(driveId)
-	if err != nil {
-		return nil, fmt.Errorf("stmt.Query(files): %w", err)
+		return nil, fmt.Errorf("db.Query(files): %w", err)
 	}
 	files := make(map[int]FileDescriptor)
 	var id int
@@ -129,20 +121,14 @@ func (c *sqlCatalog) CreateFile(driveId int, name string, uuid string, dirId int
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("INSERT INTO files (driveId, name, directoryId, uuid, created, updated, metadata) values (?, ?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return 0, fmt.Errorf("db.Prepare: %w", err)
+	if _, err := db.Exec("INSERT INTO files (driveId, name, directoryId, uuid, created, updated, metadata) values (?, ?, ?, ?, ?, ?, ?)", driveId, name, dirId, uuid, created.Unix(), updated.Unix(), metadata); err != nil {
+		return 0, fmt.Errorf("db.Exec: %w", err)
 	}
-	if _, err := stmt.Exec(driveId, name, dirId, uuid, created.Unix(), updated.Unix(), metadata); err != nil {
-		return 0, fmt.Errorf("stmt.Exec: %w", err)
-	}
-	rows, err := db.Query("SELECT last_insert_rowid()")
-	if err != nil {
-		return 0, fmt.Errorf("db.Query %w", err)
-	}
+	row := db.QueryRow("SELECT last_insert_rowid()")
 	var id int64
-	rows.Next()
-	rows.Scan(&id)
+	if err := row.Scan(&id); err != nil { 
+		return 0, fmt.Errorf("db.QueryRow: %w", err)
+	}
 	db.Close()
 	return int(id), nil
 }
@@ -154,20 +140,14 @@ func (c *sqlCatalog) CreateDirectory(driveId int, name string, parentId int) (in
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("INSERT INTO directories (driveId, name, parentId) values (?, ?, ?)")
-	if err != nil {
-		return 0, fmt.Errorf("db.Prepare: %w", err)
+	if _, err := db.Exec("INSERT INTO directories (driveId, name, parentId) values (?, ?, ?)", driveId, name, parentId); err != nil {
+		return 0, fmt.Errorf("db.Exec: %w", err)
 	}
-	if _, err := stmt.Exec(driveId, name, parentId); err != nil {
-		return 0, fmt.Errorf("stmt.Exec: %w", err)
-	}
-	rows, err := db.Query("SELECT last_insert_rowid()")
-	if err != nil {
-		return 0, fmt.Errorf("db.Query %w", err)
-	}
+	row := db.QueryRow("SELECT last_insert_rowid()")
 	var id int64
-	rows.Next()
-	rows.Scan(&id)
+	if err := row.Scan(&id); err != nil {
+		return 0, fmt.Errorf("db.QueryRow: %w", err)
+	}
 	db.Close()
 	return int(id), nil
 }
@@ -178,14 +158,9 @@ func (c *sqlCatalog) UpdateFile(id int, name string, dirId int) error {
 		return err
 	}
 	defer db.Close()
-
-	stmt, err := db.Prepare("UPDATE files SET name = ?, directoryId = ? where id = ?")
-	if err != nil {
-		return fmt.Errorf("db.Prepare: %w", err)
-	}
 	
-	if _, err := stmt.Exec(name, dirId, id); err != nil {
-		return fmt.Errorf("stmt.Exec: %w", err)
+	if _, err := db.Exec("UPDATE files SET name = ?, directoryId = ? where id = ?", name, dirId, id); err != nil {
+		return fmt.Errorf("db.Exec: %w", err)
 	}
 	db.Close()
 	return nil
@@ -198,13 +173,8 @@ func (c *sqlCatalog) UpdateDirectory(id int, name string, parentId int) error {
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("UPDATE directories SET name = ?, parentId = ? where id = ?")
-	if err != nil {
-		return fmt.Errorf("db.Prepare: %w", err)
-	}
-	
-	if _, err := stmt.Exec(name, parentId, id); err != nil {
-		return fmt.Errorf("stmt.Exec: %w", err)
+	if _, err := db.Exec("UPDATE directories SET name = ?, parentId = ? where id = ?", name, parentId, id); err != nil {
+		return fmt.Errorf("db.Exec: %w", err)
 	}
 	db.Close()
 	return nil
@@ -240,27 +210,18 @@ func (c *sqlCatalog) CountFilesInDirectory(dirId int) (int, error) {
 	}
 	defer db.Close()
 	
-	stmt, err := db.Prepare(`  with recursive subfolders(name, id) as (
+	row := db.QueryRow(`  with recursive subfolders(name, id) as (
                                      select name, id from directories where parentId = ?
                                      union all
                                      select directories.name, directories.id 
                                        from directories, subfolders 
                                        where directories.parentId = subfolders.id
-                                   ) select count(*) from files where directoryId = ? or directoryId in (select id from subfolders)`)
-	if err != nil {
-		return 0, fmt.Errorf("db.Prepare: %w", err)
-	}
-	rows, err := stmt.Query(dirId, dirId)
-	if err != nil {
-		return 0, fmt.Errorf("stmt.Query: %w", err)
-	}
+                                   ) select count(*) from files where directoryId = ? or directoryId in (select id from subfolders)`, dirId, dirId)
 	var count int
-	for rows.Next() {
-		err = rows.Scan(&count)
-		if err != nil {
-			return 0, fmt.Errorf("error reading count table: %w", err)
-		}
+	if err := row.Scan(&count); err != nil { 
+		return 0, fmt.Errorf("db.QueryRow: %w", err)
 	}
+	db.Close()
 	return count, nil
 }
 
@@ -271,20 +232,11 @@ func (c *sqlCatalog) CountFilesInDrive(driveId int) (int, error) {
 	}
 	defer db.Close()
 	
-	stmt, err := db.Prepare(`select count(*) from files where driveId = ?`)
-	if err != nil {
-		return 0, fmt.Errorf("db.Prepare: %w", err)
-	}
-	rows, err := stmt.Query(driveId)
-	if err != nil {
-		return 0, fmt.Errorf("stmt.Query: %w", err)
-	}
+	row := db.QueryRow(`select count(*) from files where driveId = ?`, driveId)
 	var count int
-	for rows.Next() {
-		err = rows.Scan(&count)
-		if err != nil {
-			return 0, fmt.Errorf("error reading count table: %w", err)
-		}
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("db.QueryRow: %w", err)
 	}
+	db.Close()
 	return count, nil
 }
