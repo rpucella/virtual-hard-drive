@@ -34,6 +34,10 @@ func maxLength(strings []string) int {
 	return current
 }
 
+func log(comm string, text string) {
+	fmt.Printf("[%s] %s\n", comm, text)
+}
+
 func initializeCommands() map[string]command {
 	commands := make(map[string]command)
 	commands["exit"] = command{
@@ -52,7 +56,7 @@ func initializeCommands() map[string]command {
 		1, 1, commandInfo, "info <file>", "Show remote file information",
 	}
 	commands["get"] = command{
-		1, 1, commandGet, "get <file>", "Download remote file to disk",
+		1, -1, commandGet, "get <file> ...", "Download remote files to disk",
 	}
 	commands["put"] = command{
 		1, -1, commandPut, "put <local-file/folder> ... [<folder>]", "Upload local files to remote folder",
@@ -67,7 +71,7 @@ func initializeCommands() map[string]command {
 		1, 1, commandHash, "hash <local-file>", "Compute CRC32C of local file",
 	}
 	commands["mv"] = command{
-		2, 2, commandMv, "mv <folder/file> <folder/file>", "Move remote folder or file",
+		2, -1, commandMv, "mv <folder/file> ... <folder/file>", "Move remote folder or file",
 	}
 	return commands
 }
@@ -189,28 +193,30 @@ func isDirectory(path string) (bool, error) {
 }
 
 func commandGet(args []string, ctxt *context) error {
-	fileObj, err := virtualfs.NavigateFile(ctxt.pwd, args[0])
-	if err != nil {
-		return fmt.Errorf("get: %w", err)
+	expandedArgs := args
+	for _, arg := range expandedArgs {
+		log("get", "----------------------------------------")
+		fileObj, err := virtualfs.NavigateFile(ctxt.pwd, arg)
+		if err != nil {
+			return fmt.Errorf("get: %w", err)
+		}
+		file := fileObj.AsFile()
+		if file == nil {
+			return fmt.Errorf("file %s is not a file", fileObj.Name())
+		}
+		log("get", fmt.Sprintf("UUID %s", file.UUID()))
+		err = fileObj.Drive().Storage().DownloadFile(file.UUID(), file.Metadata(), fileObj.Name())
+		if err != nil {
+			return fmt.Errorf("get: %w", err)
+		}
+		fmt.Printf("Get %s\n", fileObj.Name())
 	}
-	file := fileObj.AsFile()
-	if file == nil {
-		return fmt.Errorf("file %s is not a file", fileObj.Name())
-	}
-	err = fileObj.Drive().Storage().DownloadFile(file.UUID(), file.Metadata(), fileObj.Name())
-	if err != nil {
-		return fmt.Errorf("get: %w", err)
-	}
-	fmt.Printf("UUID %s downloaded to file %s\n", file.UUID(), fileObj.Name())
 	return nil
 }
 
 func commandPut(args []string, ctxt *context) error {
 	destFolder := ctxt.pwd
 	lastArg := len(args)
-
-	// Global to control whether to show a separating line above the upload info.
-	first := true
 	failures := 0
 
 	var process func(string, virtualfs.VirtualFS) error
@@ -227,11 +233,13 @@ func commandPut(args []string, ctxt *context) error {
 		}
 		if isDir {
 			if destFolder.IsRoot() {
-				return fmt.Errorf("cannot create drive")
+				return fmt.Errorf("put: cannot create drive")
 			}
 			if err := virtualfs.ValidateName(srcName); err != nil {
 				return err
 			}
+			log("put", "----------------------------------------")
+			log("put", fmt.Sprintf("creating directory %s", srcName))
 			dirObj, err := virtualfs.CreateDirectory(destFolder, srcName)
 			if err != nil {
 				return err
@@ -247,26 +255,23 @@ func commandPut(args []string, ctxt *context) error {
 				}
 				if err := process(filepath.Join(srcFilePath, f.Name()), dirObj); err != nil {
 					failures += 1
-					fmt.Println(fmt.Errorf("Upload SKIPPED - %w\n", err))
+					log("put", (fmt.Errorf("SKIPPED - %w", err)).Error())
 				}
 			}
 		} else { 
 			newUUID := uuid.NewString()
 			drive := destFolder.Drive()
 			if drive == nil {
-				return fmt.Errorf("no drive for folder: %s", destFolder.Path())
+				return fmt.Errorf("put: no drive for folder: %s", destFolder.Path())
 			}
 			// Upload to storage.
-			if first {
-				first = false
-			} else {
-				fmt.Println("----------------------------------------")
-			}
+			log("put", "----------------------------------------")
+			log("put", fmt.Sprintf("UUID %s", newUUID))
 			metadata, err := drive.Storage().UploadFile(srcFilePath, newUUID)
 			if err != nil {
 				return fmt.Errorf("put: %w", err)
 			}
-			fmt.Printf("Uploaded to UUID %s\n", newUUID)
+			fmt.Printf("Put %s\n", srcName)
 			// Add file to catalog.
 			if _, err := virtualfs.CreateFile(destFolder, srcName, newUUID, metadata); err != nil {
 				return fmt.Errorf("put: %w", err)
@@ -298,11 +303,11 @@ func commandPut(args []string, ctxt *context) error {
 	for i := 0; i < lastArg; i++ {
 		if err := process(args[i], destFolder); err != nil {
 			failures += 1
-			fmt.Println(fmt.Errorf("Upload SKIPPED - %w\n", err))
+			log("put", (fmt.Errorf("SKIPPED - %w", err)).Error())
 		}
 	}
 	if failures > 0 {
-		fmt.Printf("\nNumber of failures: %d\n", failures)
+		log("put", fmt.Sprintf("failures: %d", failures))
 	}
 	return nil
 }
@@ -346,26 +351,38 @@ func commandMkdir(args []string, ctxt *context) error {
 }
 
 func commandMv(args []string, ctxt *context) error {
-	srcPath := args[0]
-	tgtPath := args[1]
-
-	srcObj, err := virtualfs.NavigatePath(ctxt.pwd, srcPath)
-	if err != nil {
-		return fmt.Errorf("mv: %w", err)
-	}
+	srcPaths := args[:len(args) - 1]
+	tgtPath := args[len(args) - 1]
 	// Check destination path.
 	tgtObj, err := virtualfs.CheckPath(ctxt.pwd, tgtPath)
 	if err != nil {
 		return fmt.Errorf("mv: %w", err)
 	}
+	
+	// Target exists, and it's a directory.
 	if tgtObj != nil && tgtObj.IsDir() {
-		// Target exists, and it's a directory.
-		if err := srcObj.Move(tgtObj, srcObj.Name()); err != nil {
-			return fmt.Errorf("mv: %w", err)
+		// Move every source to the target.
+		for _, srcPath := range srcPaths {
+			srcObj, err := virtualfs.NavigatePath(ctxt.pwd, srcPath)
+			if err != nil {
+				return fmt.Errorf("mv: %w", err)
+			}
+			
+			if err := srcObj.Move(tgtObj, srcObj.Name()); err != nil {
+				return fmt.Errorf("mv: %w", err)
+			}
 		}
 		return nil
 	}
-	// Target name doesn't exist. Move away.
+
+	// Target name doesn't exist. So we're trying to "rename" a single source.
+	if len(srcPaths) > 1 {
+		return fmt.Errorf("mv: cannot rename multiple files at once")
+	}
+	srcObj, err := virtualfs.NavigatePath(ctxt.pwd, srcPaths[0])
+	if err != nil {
+		return fmt.Errorf("mv: %w", err)
+	}
 	tgtParent, tgtName, err := virtualfs.NavigateParent(ctxt.pwd, tgtPath)
 	if err != nil {
 		return fmt.Errorf("mv: %w", err)

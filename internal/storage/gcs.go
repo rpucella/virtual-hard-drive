@@ -10,7 +10,6 @@ import (
 	"os"
 	"math"
 	"strconv"
-	"path/filepath"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
@@ -50,6 +49,10 @@ func uuidToPath(uuid string) (string, error) {
 		return "", fmt.Errorf("length of UUID %s <> 36", uuid)
 	}
 	return fmt.Sprintf("%s/%s/%s/%s/%s", uuid[:2], uuid[2:4], uuid[4:6], uuid[6:8], uuid), nil
+}
+
+func (s GoogleCloud) log(text string) {
+	fmt.Printf("[gcs] %s\n", text)
 }
 
 func (s GoogleCloud) ListFiles() ([]string, error) {
@@ -155,10 +158,10 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 		if err != nil {
 			return fmt.Errorf("wrong metadata: %s", metadata)
 		}
-		fmt.Printf("File split into %d objects\n", numParts)
+		s.log(fmt.Sprintf("objects: %d", numParts))
 		for i := int64(0); i < numParts; i++ {
 			currTarget := fmt.Sprintf("%s.%03d", target, i)
-			fmt.Printf("Downloading object %s\n", currTarget)
+			s.log(fmt.Sprintf("downloading object %s", currTarget))
 			obj := client.Bucket(bucket).Object(currTarget)
 			rc, err := obj.NewReader(ctx)
 			if err != nil {
@@ -175,7 +178,7 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 			}
 		}
 	} else {
-		fmt.Printf("Downloading object %s", target)
+		s.log(fmt.Sprintf("downloading object %s", target))
 		obj := client.Bucket(bucket).Object(target)
 		rc, err := obj.NewReader(ctx)
 		if err != nil {
@@ -199,7 +202,6 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	bucket := s.bucket
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
-	fileName := filepath.Base(path)
 	if err != nil {
 		return "", fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -218,7 +220,7 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	fileSize := attrs.Size()
 	// Calculate total number of parts the file will be chunked into.
 	totalPartsNum := int(math.Ceil(float64(fileSize) / float64(CHUNK_SIZE)))
-	fmt.Printf("File %s: %d objects\n", fileName, totalPartsNum)
+	s.log(fmt.Sprintf("objects: %d", totalPartsNum))
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -230,7 +232,7 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	// https://socketloop.com/tutorials/golang-how-to-split-or-chunking-a-file-to-smaller-pieces
 	for i := 0; i < totalPartsNum; i++ {
 		currTarget := fmt.Sprintf("%s.%03d", target, i)
-		fmt.Printf("Uploading to object %s\n", currTarget)
+		s.log(fmt.Sprintf("uploading object %s", currTarget))
 
 		// Setup a timeout.
 		ctx, cancel := context.WithTimeout(ctx, time.Second * UPLOAD_TIMEOUT)

@@ -49,11 +49,8 @@ func main() {
 	}	
 }
 
-func loop(ctxt *context) {
-	
-	// https://patorjk.com/software/taag/#p=display&f=Colossal&t=Virtual%20HD
-	
-	fmt.Print(`
+// https://patorjk.com/software/taag/#p=display&f=Colossal&t=Virtual%20HD
+const BANNER = `
 888     888 d8b         888                      888      888    888 8888888b.  
 888     888 Y8P         888                      888      888    888 888  "Y88b 
 888     888             888                      888      888    888 888    888 
@@ -62,8 +59,11 @@ Y88b   d88P 888 888d888 888888 888  888  8888b.  888      8888888888 888    888
   Y88o88P   888 888     888    888  888 .d888888 888      888    888 888    888 
    Y888P    888 888     Y88b.  Y88b 888 888  888 888      888    888 888  .d88P 
     Y8P     888 888      "Y888  "Y88888 "Y888888 888      888    888 8888888P"
+`
 
-`)
+func loop(ctxt *context) {
+	
+	fmt.Println(BANNER)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -99,10 +99,10 @@ func processCommand(ctxt *context, comm string, args []string) error {
 		return fmt.Errorf("Unknown command: %s", comm)
 	}
 	if len(args) < commObj.minArgCount {
-		return fmt.Errorf("Too few arguments (expected %d): %s", commObj.minArgCount, comm)
+		return fmt.Errorf("%s: too few arguments (expected %d)", comm, commObj.minArgCount)
 	}
 	if commObj.maxArgCount >= 0 && len(args) > commObj.maxArgCount {
-		return fmt.Errorf("Too many arguments (expected %d): %s", commObj.maxArgCount, comm)
+		return fmt.Errorf("%s: too many arguments (expected %d)", comm, commObj.maxArgCount)
 	}
 	err := commObj.process(args, ctxt)
 	return err

@@ -17,6 +17,10 @@ func NewLocalFileSystem(root string) LocalFileSystem {
 	return LocalFileSystem{root}
 }
 
+func (s LocalFileSystem) log(text string) {
+	fmt.Printf("[local] %s\n", text)
+}
+
 func (s LocalFileSystem) Name() string {
 	return fmt.Sprintf("local::%s", s.root)
 }
@@ -71,6 +75,7 @@ func (s LocalFileSystem) DownloadFile(uuid string, metadata string, outputFileNa
 	}
 	defer dest.Close()
 
+	s.log(fmt.Sprintf("copying %s", outputFileName))
 	if _, err := io.Copy(dest, src); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
@@ -92,6 +97,7 @@ func (s LocalFileSystem) UploadFile(file string, target string) (string, error) 
 	}
 	defer dest.Close()
 
+	s.log(fmt.Sprintf("copying %s", file))
 	if _, err := io.Copy(dest, src); err != nil {
 		return "", fmt.Errorf("io.Copy: %v", err)
 	}

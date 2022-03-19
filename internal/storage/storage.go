@@ -7,5 +7,6 @@ type Storage interface {
 	DownloadFile(string, string, string) error
 	UploadFile(string, string) (string, error)
 	RemoteInfo(string, string) error
+	log(string) 
 }
 
