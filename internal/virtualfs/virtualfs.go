@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"regexp"
 	
 	"rpucella.net/virtual-hard-drive/internal/storage"
 )
@@ -271,3 +272,72 @@ func CreateDirectory(dir VirtualFS, name string) (VirtualFS, error) {
 	return dirObj, nil
 }
 
+func ExpandPaths(cat VirtualFS, paths []string) ([]string, error) {
+	result := make([]string, 0)
+	for _, path := range paths {
+		// When we encounter a * in a path, we stop checking for existence of entries.
+		globbing := false
+		cleanPath := path
+		if strings.HasSuffix(path, "/") {
+			cleanPath = path[:len(path) - 1]
+		}
+		components := decomposePath(cleanPath)
+		pathResults := []VirtualFS{cat}
+		for _, component := range components {
+			newPathResults := make([]VirtualFS, 0)
+			for _, curr := range pathResults {
+				if component == "" {
+					// Reset to root!
+					newCurr := findRoot(curr)
+					newPathResults = append(newPathResults, newCurr)
+				} else if component == "." {
+					// Do nothing!
+					newPathResults = append(newPathResults, curr)
+				} else if component == ".." {
+					if curr.Parent() == nil {
+						return nil, fmt.Errorf("root has no parent")
+					}
+					newCurr := curr.Parent()
+					newPathResults = append(newPathResults, newCurr)
+				} else if strings.Contains(component, "*") {
+					globbing = true
+					regex := strings.Replace(regexp.QuoteMeta(component), "\\*", ".*", -1)
+					r, _ := regexp.Compile("^" + regex + "$")
+					for _, content := range curr.ContentList() {
+						if r.MatchString(content) {
+							newCurr, found := curr.GetContent(content)
+							if !found {
+								// Wait - what?
+								continue
+							}
+							newPathResults = append(newPathResults, newCurr)
+						}
+					}
+				} else {
+					if !curr.IsDir() {
+						if globbing {
+							// Skip.
+							continue
+						}
+						return nil, fmt.Errorf("not a folder: %s", curr.Name())
+					}
+					newCurr, found := curr.GetContent(component)
+					if !found {
+						if globbing {
+							// Skip.
+							continue
+						}
+						return nil, fmt.Errorf("cannot find %s in %s", component, curr.Path())
+					}
+					newPathResults = append(newPathResults, newCurr)
+				}
+			}
+			pathResults = newPathResults
+		}
+		for _, r := range pathResults {
+			result = append(result, r.Path())
+			//fmt.Println(r.Path())
+		}
+	}
+	return result, nil
+}

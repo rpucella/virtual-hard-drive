@@ -193,10 +193,14 @@ func isDirectory(path string) (bool, error) {
 }
 
 func commandGet(args []string, ctxt *context) error {
-	expandedArgs := args
-	for _, arg := range expandedArgs {
+	srcPaths, err := virtualfs.ExpandPaths(ctxt.pwd, args)
+	if err != nil {
+		return fmt.Errorf("get: %s", err)
+	}
+	for _, srcPath := range srcPaths {
 		log("get", "----------------------------------------")
-		fileObj, err := virtualfs.NavigateFile(ctxt.pwd, arg)
+		log("get", fmt.Sprintf("File %s", srcPath))
+		fileObj, err := virtualfs.NavigateFile(ctxt.pwd, srcPath)
 		if err != nil {
 			return fmt.Errorf("get: %w", err)
 		}
@@ -351,7 +355,10 @@ func commandMkdir(args []string, ctxt *context) error {
 }
 
 func commandMv(args []string, ctxt *context) error {
-	srcPaths := args[:len(args) - 1]
+	srcPaths, err := virtualfs.ExpandPaths(ctxt.pwd, args[:len(args) - 1])
+	if err != nil {
+		return fmt.Errorf("mv: %w", err)
+	}
 	tgtPath := args[len(args) - 1]
 	// Check destination path.
 	tgtObj, err := virtualfs.CheckPath(ctxt.pwd, tgtPath)
