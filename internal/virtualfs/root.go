@@ -113,7 +113,11 @@ func NewRoot(c catalog.Catalog) (Root, error) {
 	for _, driveDesc := range content {
 		var store storage.Storage
 		if driveDesc.Type == "gcs" {
-			store = storage.NewGoogleCloud(driveDesc.Location)
+			newStore, err := storage.NewGoogleCloud(driveDesc.Location)
+			if err != nil {
+				return nil, fmt.Errorf("cannot connect to GCS: %w", err)
+			}
+			store = newStore
 		} else if driveDesc.Type == "local" {
 			store = storage.NewLocalFileSystem(driveDesc.Location)
 		} else {

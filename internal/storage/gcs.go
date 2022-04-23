@@ -10,9 +10,11 @@ import (
 	"os"
 	"math"
 	"strconv"
+	"path"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"rpucella.net/virtual-hard-drive/internal/util"
 )
@@ -22,16 +24,44 @@ import (
 
 const (
 	UPLOAD_TIMEOUT = 600    // 10m
-	CHUNK_SIZE = 52428800   // 50MB
+	DOWNLOAD_TIMEOUT = 600  // 10m
+	// CHUNK_SIZE = 52428800   // 50MB
+	CHUNK_SIZE = 52428800 * 4  // 200MB
 	UPLOAD_PAUSE = 2
 )
 
-type GoogleCloud struct {
-	bucket string
+const CONFIG_FOLDER = ".vhd"
+const CONFIG_CREDENTIALS = "priv.json"
+
+func keyFile() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil { 
+		return "", fmt.Errorf("cannot get home directory: %v", err)
+	}
+	configFolder := path.Join(home, CONFIG_FOLDER)
+	info, err := os.Stat(configFolder)
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf("config folder %s does not exist", configFolder)
+	} else if err != nil {
+		return "", fmt.Errorf("cannot access %s directory: %w", configFolder, err)
+	} else if !info.IsDir() {
+		return "", fmt.Errorf("path %s not a directory", configFolder)
+	}
+	return path.Join(configFolder, CONFIG_CREDENTIALS), nil
 }
 
-func NewGoogleCloud(bucket string) GoogleCloud {
-	return GoogleCloud{bucket}
+
+type GoogleCloud struct {
+	bucket string
+	privKey string
+}
+
+func NewGoogleCloud(bucket string) (GoogleCloud, error) {
+	privKey, err := keyFile()
+	if err != nil {
+		return GoogleCloud{}, err
+	}
+	return GoogleCloud{bucket, privKey}, nil
 }
 
 func (s GoogleCloud) Name() string {
@@ -58,7 +88,7 @@ func (s GoogleCloud) log(text string) {
 func (s GoogleCloud) ListFiles() ([]string, error) {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return nil, fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -85,7 +115,7 @@ func (s GoogleCloud) ListFiles() ([]string, error) {
 func (s GoogleCloud) ReadFile(file string) ([]byte, error) {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return nil, fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -110,7 +140,7 @@ func (s GoogleCloud) ReadFile(file string) ([]byte, error) {
 func (s GoogleCloud) WriteFile(content []byte, target string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -132,7 +162,7 @@ func (s GoogleCloud) WriteFile(content []byte, target string) error {
 func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -143,9 +173,6 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 		return err
 	}
 	
-	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-	defer cancel()
-
 	f, err := os.Create(outputFileName)
 	if err != nil {
 		return fmt.Errorf("os.Create: %v", err)
@@ -162,6 +189,11 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 		for i := int64(0); i < numParts; i++ {
 			currTarget := fmt.Sprintf("%s.%03d", target, i)
 			s.log(fmt.Sprintf("downloading object %s", currTarget))
+
+			// Setup a timeout.
+			ctx, cancel := context.WithTimeout(ctx, time.Second * DOWNLOAD_TIMEOUT)
+			defer cancel()
+			
 			obj := client.Bucket(bucket).Object(currTarget)
 			rc, err := obj.NewReader(ctx)
 			if err != nil {
@@ -179,6 +211,11 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 		}
 	} else {
 		s.log(fmt.Sprintf("downloading object %s", target))
+
+		// Setup a timeout.
+		ctx, cancel := context.WithTimeout(ctx, time.Second * DOWNLOAD_TIMEOUT)
+		defer cancel()
+		
 		obj := client.Bucket(bucket).Object(target)
 		rc, err := obj.NewReader(ctx)
 		if err != nil {
@@ -201,7 +238,7 @@ func (s GoogleCloud) DownloadFile(uuid string, metadata string, outputFileName s
 func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return "", fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -278,10 +315,10 @@ func (s GoogleCloud) UploadFile(path string, uuid string) (string, error) {
 	return metadata, nil
 }
 
-func (s GoogleCloud) uploadFileSingle(path string, target string) error {
+func (s GoogleCloud) uploadFileSingle_OBSOLETE(path string, target string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
@@ -327,7 +364,7 @@ func (s GoogleCloud) uploadFileSingle(path string, target string) error {
 func (s GoogleCloud) RemoteInfo(uuid string, metadata string) error {
 	bucket := s.bucket
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(s.privKey))
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}

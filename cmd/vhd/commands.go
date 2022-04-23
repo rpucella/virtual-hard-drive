@@ -213,7 +213,7 @@ func commandGet(args []string, ctxt *context) error {
 		if err != nil {
 			return fmt.Errorf("get: %w", err)
 		}
-		fmt.Printf("Get %s\n", fileObj.Name())
+		log("get", fmt.Sprintf("get %s", fileObj.Name()))
 	}
 	return nil
 }
@@ -270,12 +270,13 @@ func commandPut(args []string, ctxt *context) error {
 			}
 			// Upload to storage.
 			log("put", "----------------------------------------")
+			log("put", fmt.Sprintf("source %s", srcFilePath))
 			log("put", fmt.Sprintf("UUID %s", newUUID))
 			metadata, err := drive.Storage().UploadFile(srcFilePath, newUUID)
 			if err != nil {
 				return fmt.Errorf("put: %w", err)
 			}
-			fmt.Printf("Put %s\n", srcName)
+			log("put", fmt.Sprintf("put %s", srcName))
 			// Add file to catalog.
 			if _, err := virtualfs.CreateFile(destFolder, srcName, newUUID, metadata); err != nil {
 				return fmt.Errorf("put: %w", err)
