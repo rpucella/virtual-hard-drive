@@ -10,7 +10,6 @@ import (
 	"os"
 	"math"
 	"strconv"
-	"path"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
@@ -30,26 +29,7 @@ const (
 	UPLOAD_PAUSE = 2
 )
 
-const CONFIG_FOLDER = ".vhd"
 const CONFIG_CREDENTIALS = "priv.json"
-
-func keyFile() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil { 
-		return "", fmt.Errorf("cannot get home directory: %v", err)
-	}
-	configFolder := path.Join(home, CONFIG_FOLDER)
-	info, err := os.Stat(configFolder)
-	if os.IsNotExist(err) {
-		return "", fmt.Errorf("config folder %s does not exist", configFolder)
-	} else if err != nil {
-		return "", fmt.Errorf("cannot access %s directory: %w", configFolder, err)
-	} else if !info.IsDir() {
-		return "", fmt.Errorf("path %s not a directory", configFolder)
-	}
-	return path.Join(configFolder, CONFIG_CREDENTIALS), nil
-}
-
 
 type GoogleCloud struct {
 	bucket string
@@ -57,7 +37,7 @@ type GoogleCloud struct {
 }
 
 func NewGoogleCloud(bucket string) (GoogleCloud, error) {
-	privKey, err := keyFile()
+	privKey, err := util.ConfigFile(CONFIG_CREDENTIALS)
 	if err != nil {
 		return GoogleCloud{}, err
 	}

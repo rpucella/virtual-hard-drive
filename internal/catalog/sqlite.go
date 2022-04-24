@@ -3,15 +3,14 @@ package catalog
 
 import (
 	"fmt"
-	"os"
-	"path"
 	"time"
 	"database/sql"
+
+	"rpucella.net/virtual-hard-drive/internal/util"
 	
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const CONFIG_FOLDER = ".vhd"
 const CONFIG_SQLITE = "catalog.db"
 
 type config struct {
@@ -181,25 +180,11 @@ func (c *sqlCatalog) UpdateDirectory(id int, name string, parentId int) error {
 }
 
 func Load() (Catalog, error) {
-	home, err := os.UserHomeDir()
-	if err != nil { 
-		return nil, fmt.Errorf("cannot get home directory: %v", err)
+	sqlFile, err := util.ConfigFile(CONFIG_SQLITE)
+	if err != nil {
+		return nil, err
 	}
-	configFolder := path.Join(home, CONFIG_FOLDER)
-	info, err := os.Stat(configFolder)
-	if os.IsNotExist(err) {
-		err := os.Mkdir(configFolder, 0700)
-		if err != nil {
-			return nil, fmt.Errorf("cannot create %s directory: %w", configFolder, err)
-		}
-	} else if err != nil {
-		return nil, fmt.Errorf("cannot access %s directory: %w", configFolder, err)
-	} else if !info.IsDir() {
-		return nil, fmt.Errorf("path %s not a directory", configFolder)
-	}
-	result := &sqlCatalog{
-		path.Join(configFolder, CONFIG_SQLITE),
-	}
+	result := &sqlCatalog{sqlFile}
 	return result, nil
 }
 
