@@ -73,6 +73,9 @@ func initializeCommands() map[string]command {
 	commands["mv"] = command{
 		2, -1, commandMv, "mv <folder/file> ... <folder/file>", "Move remote folder or file",
 	}
+	commands["find"] = command{
+		1, 1, commandFind, "find <string>", "Find folders/files containing <string> (case insensitive)",
+	}
 	return commands
 }
 
@@ -397,6 +400,16 @@ func commandMv(args []string, ctxt *context) error {
 	}
 	if err := srcObj.Move(tgtParent, tgtName); err != nil {
 		return fmt.Errorf("mv: %w", err)
+	}
+	return nil
+}
+
+func commandFind(args []string, ctxt *context) error {
+	curr := ctxt.pwd
+	findString := args[0]
+	results := curr.Find(findString)
+	for _, r := range results {
+		fmt.Println(r.Path())
 	}
 	return nil
 }

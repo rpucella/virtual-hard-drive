@@ -3,6 +3,7 @@ package virtualfs
 
 import (
 	"fmt"
+	"strings"
 )
 
 type vfs_dir struct {
@@ -134,4 +135,25 @@ func (d *vfs_dir) Move(targetDir VirtualFS, name string) error {
 func (d *vfs_dir) CountFiles() (int, error) {
 	count, err := d.Drive().countFilesInDir(d.id)
 	return count, err
+}
+
+func (f *vfs_dir) Find(search string) []VirtualFS {
+	///fmt.Printf("About to search directory %s\n", f.name)
+	var results []VirtualFS = nil
+	if strings.Contains(strings.ToLower(f.name), search) {
+		results = []VirtualFS{f}
+	}
+	for _, vf := range f.content {
+		temp := vf.Find(search)
+		if len(temp) > 0 {
+			if results == nil {
+				results = temp
+			} else {
+				for _, r := range temp {
+					results = append(results, r)
+				}
+			}
+		}
+	}
+	return results
 }

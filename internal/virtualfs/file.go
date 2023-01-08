@@ -4,6 +4,7 @@ package virtualfs
 import (
 	"fmt"
 	"time"
+	"strings"
 )
 
 type vfs_file struct {
@@ -142,5 +143,12 @@ func (f *vfs_file) Move(targetDir VirtualFS, name string) error {
 	f.name = name
 	f.updated = time.Now()
 	targetDir.SetContent(name, f)
+	return nil
+}
+
+func (f *vfs_file) Find(search string) []VirtualFS {
+	if strings.Contains(strings.ToLower(f.name), search) {
+		return []VirtualFS{f}
+	}
 	return nil
 }

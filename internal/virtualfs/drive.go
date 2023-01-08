@@ -215,3 +215,13 @@ func (d *drive) CountFiles() (int, error) {
 	}
 	return count, nil
 }
+
+func (d *drive) Find(search string) []VirtualFS {
+	///fmt.Printf("About to search drive %s\n", d.name)
+	if d.top == nil {
+		if err := fetchCatalog(d); err != nil {
+			fmt.Printf("ERROR when fetching catalog for %s\n%w\n", d.name, err)
+		}
+	}
+	return d.top.Find(search)
+}

@@ -140,3 +140,20 @@ func NewRoot(c catalog.Catalog) (Root, error) {
 func (r *root) Move(targetDir VirtualFS, name string) error {
 	return fmt.Errorf("cannot move root")
 }
+
+func (r *root) Find(search string) []VirtualFS {
+	var results []VirtualFS = nil
+	for _, d := range r.drives {
+		temp := d.AsVirtualFS().Find(search)
+		if len(temp) > 0 {
+			if results == nil {
+				results = temp
+			} else {
+				for _, r := range(temp) {
+					results = append(results, r)
+				}
+			}
+		}
+	}
+	return results
+}

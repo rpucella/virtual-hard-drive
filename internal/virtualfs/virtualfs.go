@@ -62,6 +62,7 @@ type VirtualFS interface {
 	CatalogId() int      // Meaning depends on the kind of virtual FS node we have.
 	Move(VirtualFS, string) error
 	CountFiles() (int, error)
+	Find(string) []VirtualFS
 }
 
 func constructPath(vfs VirtualFS) string {
