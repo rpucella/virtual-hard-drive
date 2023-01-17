@@ -406,7 +406,8 @@ func commandMv(args []string, ctxt *context) error {
 
 func commandFind(args []string, ctxt *context) error {
 	curr := ctxt.pwd
-	findString := args[0]
+	// Search is case-insensitive.
+	findString := strings.ToLower(args[0])
 	results := curr.Find(findString)
 	for _, r := range results {
 		fmt.Println(r.Path())
