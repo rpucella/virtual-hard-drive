@@ -409,6 +409,9 @@ func commandFind(args []string, ctxt *context) error {
 	// Search is case-insensitive.
 	findString := strings.ToLower(args[0])
 	results := curr.Find(findString)
+	sort.Slice(results, func(i int, j int) bool {
+		return results[i].Path() < results[j].Path()
+	})
 	for _, r := range results {
 		fmt.Println(r.Path())
 	}
