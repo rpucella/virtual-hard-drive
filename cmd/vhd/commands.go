@@ -224,10 +224,11 @@ func commandGet(args []string, ctxt *context) error {
 func commandPut(args []string, ctxt *context) error {
 	destFolder := ctxt.pwd
 	lastArg := len(args)
-	failures := 0
+	failures := make([]error, 0)
 
 	var process func(string, virtualfs.VirtualFS) error
 	process = func(srcFilePath string, destFolder virtualfs.VirtualFS) error {
+		log("put", "----------------------------------------")
 		srcName := filepath.Base(srcFilePath)
 		_, found := destFolder.GetContent(srcName)
 		if found {
@@ -245,7 +246,6 @@ func commandPut(args []string, ctxt *context) error {
 			if err := virtualfs.ValidateName(srcName); err != nil {
 				return err
 			}
-			log("put", "----------------------------------------")
 			log("put", fmt.Sprintf("creating directory %s", srcName))
 			dirObj, err := virtualfs.CreateDirectory(destFolder, srcName)
 			if err != nil {
@@ -261,7 +261,7 @@ func commandPut(args []string, ctxt *context) error {
 					continue
 				}
 				if err := process(filepath.Join(srcFilePath, f.Name()), dirObj); err != nil {
-					failures += 1
+					failures = append(failures, err)
 					log("put", (fmt.Errorf("SKIPPED - %w", err)).Error())
 				}
 			}
@@ -272,7 +272,6 @@ func commandPut(args []string, ctxt *context) error {
 				return fmt.Errorf("put: no drive for folder: %s", destFolder.Path())
 			}
 			// Upload to storage.
-			log("put", "----------------------------------------")
 			log("put", fmt.Sprintf("source %s", srcFilePath))
 			log("put", fmt.Sprintf("UUID %s", newUUID))
 			metadata, err := drive.Storage().UploadFile(srcFilePath, newUUID)
@@ -310,12 +309,16 @@ func commandPut(args []string, ctxt *context) error {
 	}
 	for i := 0; i < lastArg; i++ {
 		if err := process(args[i], destFolder); err != nil {
-			failures += 1
+			failures = append(failures, err)
 			log("put", (fmt.Errorf("SKIPPED - %w", err)).Error())
 		}
 	}
-	if failures > 0 {
-		log("put", fmt.Sprintf("failures: %d", failures))
+	if len(failures) > 0 {
+		log("put", "----------------------------------------")
+		log("put", fmt.Sprintf("failures: %d", len(failures)))
+		for _, err := range failures {
+			log("put", err.Error())
+		}
 	}
 	return nil
 }
