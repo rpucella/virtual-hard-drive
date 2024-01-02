@@ -8,6 +8,7 @@ import (
 )
 
 const CONFIG_FOLDER = ".vhd"
+const SCRIPTS_FOLDER = "scripts"
 
 func ConfigFolder() (string, error) {
 	home, err := os.UserHomeDir()
@@ -34,3 +35,10 @@ func ConfigFile(name string) (string, error) {
 	return path.Join(configFolder, name), nil
 }
 
+func ScriptsFolder() (string, error) {
+	cfg, err := ConfigFolder()
+	if err != nil {
+		return "", err
+	}
+	return path.Join(cfg, SCRIPTS_FOLDER), nil
+}

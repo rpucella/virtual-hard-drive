@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"io"
 	"os"
+	"path"
+	"os/exec"
 	"errors"
 	"strings"
 
@@ -75,6 +77,9 @@ func initializeCommands() map[string]command {
 	}
 	commands["find"] = command{
 		1, 1, commandFind, "find <string>", "Find folders/files containing <string> (case insensitive)",
+	}
+	commands["script"] = command{
+		0, 1, commandScript, "script [<name>]", "Run script from VHDCONFIG/scripts folder",
 	}
 	return commands
 }
@@ -419,4 +424,43 @@ func commandFind(args []string, ctxt *context) error {
 		fmt.Println(r.Path())
 	}
 	return nil
+}
+
+func commandScript(args []string, ctxt *context) error {
+	available := make([]string, 0)
+	scriptsFolder, err := util.ScriptsFolder()
+	if err != nil {
+		return fmt.Errorf("script: %w", err)
+	}
+	files, err := ioutil.ReadDir(scriptsFolder)
+	if err != nil {
+		return fmt.Errorf("script: %w", err)
+	}
+	for _, fi := range files {
+		if !fi.IsDir() && strings.HasSuffix(fi.Name(), ".sh") {
+			available = append(available, fi.Name()[:len(fi.Name()) - 3])
+		}
+	}
+	width := maxLength(available)
+	if len(args) == 0 {
+		fmt.Println("Available scripts:")
+		for _, n := range available {
+			fmt.Printf("  %*s\n", -width, n)
+		}
+		return nil
+	}
+	script := args[0]
+	for _, n := range available {
+		if script == n {
+			cmd := exec.Command("zsh", "-x", path.Join(scriptsFolder, script + ".sh"))
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("script: %w", err)
+			}
+			fmt.Println(string(output))
+			return nil
+		}
+	}
+	// We have a script, so run it (appending .sh).
+	return fmt.Errorf("script: unknown script %s", script)
 }
