@@ -81,6 +81,9 @@ func initializeCommands() map[string]command {
 	commands["script"] = command{
 		0, 1, commandScript, "script [<name>]", "Run script from VHDCONFIG/scripts folder",
 	}
+	commands["trash"] = command{
+		1, 1, commandTrash, "trash <folder/file>", "Send folder/file to trash folder for the drive",
+	}
 	return commands
 }
 
@@ -463,4 +466,41 @@ func commandScript(args []string, ctxt *context) error {
 	}
 	// We have a script, so run it (appending .sh).
 	return fmt.Errorf("script: unknown script %s", script)
+}
+
+func commandTrash(args []string, ctxt *context) error {
+	srcPaths, err := virtualfs.ExpandPaths(ctxt.pwd, args)
+	if err != nil {
+		return fmt.Errorf("trash: %w", err)
+	}
+	srcObj, err := virtualfs.CheckPath(ctxt.pwd, srcPaths[0])
+	if err != nil {
+		return fmt.Errorf("trash: %w", err)
+	}
+	srcDrive := srcObj.Drive()
+	if srcDrive == nil {
+		return fmt.Errorf("trash: source path is /")
+	}
+	tgtPath := srcDrive.Name() + "/trash"
+	// Check destination path.
+	tgtObj, err := virtualfs.CheckPath(ctxt.pwd, tgtPath)
+	if err != nil {
+		return fmt.Errorf("trash: %w", err)
+	}
+	// Target exists, and it's a directory.
+	if tgtObj != nil && tgtObj.IsDir() {
+		// Move every source to the target.
+		for _, srcPath := range srcPaths {
+			srcObj, err := virtualfs.NavigatePath(ctxt.pwd, srcPath)
+			if err != nil {
+				return fmt.Errorf("trash: %w", err)
+			}
+
+			if err := srcObj.Move(tgtObj, srcObj.Name()); err != nil {
+				return fmt.Errorf("trash: %w", err)
+			}
+		}
+		return nil
+	}
+	return nil
 }
